@@ -1,0 +1,150 @@
+// Prisma schema for order-management-system
+// Generated according to project specification
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum CampaignState {
+  STARTED
+  FROZEN
+  ENDED
+}
+
+enum SmsStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+model User {
+  id             String         @id @default(uuid())
+  mobile         String         @unique
+  email          String?        @unique
+  firstName      String
+  lastName       String
+  address        String?
+  role           Role
+  passwordHash   String
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  sessions       UserSession[]
+  createdCustomers Customer[]   @relation("CustomerCreatedBy")
+  updatedCustomers Customer[]   @relation("CustomerUpdatedBy")
+}
+
+model UserSession {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+}
+
+model OtpCode {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  code       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model Customer {
+  id          String   @id @default(uuid())
+  mobile      String   @unique
+  firstName   String
+  lastName    String
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation("CustomerCreatedBy", fields: [createdById], references: [id])
+  updatedById String
+  updatedBy   User     @relation("CustomerUpdatedBy", fields: [updatedById], references: [id])
+  orders      Order[]
+}
+
+model Campaign {
+  id        String         @id @default(uuid())
+  name      String
+  state     CampaignState  @default(STARTED)
+  startedAt DateTime       @default(now())
+  frozenAt  DateTime?
+  endedAt   DateTime?
+  orders    Order[]
+}
+
+model PickupLocation {
+  id                String  @id @default(uuid())
+  name              String
+  address           String
+  distributorName   String
+  distributorMobile String
+}
+
+model Order {
+  id               String         @id @default(uuid())
+  campaignId       String
+  campaign         Campaign       @relation(fields: [campaignId], references: [id])
+  customerId       String
+  customer         Customer       @relation(fields: [customerId], references: [id])
+  pickupLocationId String
+  pickupLocation   PickupLocation @relation(fields: [pickupLocationId], references: [id])
+  chickenQty       Int            @default(0)
+  fishQty          Int            @default(0)
+  vegQty           Int            @default(0)
+  eggQty           Int            @default(0)
+  otherQty         Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  createdById      String
+  updatedById      String
+
+  @@unique([campaignId, customerId])
+}
+
+model SmsTemplate {
+  id   String @id @default(uuid())
+  name String @unique
+  body String
+}
+
+model SmsMessage {
+  id                String    @id @default(uuid())
+  campaignId        String?
+  orderId           String?
+  customerId        String?
+  toMobile          String
+  body              String
+  status            SmsStatus @default(QUEUED)
+  attemptCount      Int       @default(0)
+  lastError         String?
+  providerMessageId String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String
+  entityType  String
+  entityId    String
+  action      String
+  diff        Json?
+  createdAt   DateTime @default(now())
+}
