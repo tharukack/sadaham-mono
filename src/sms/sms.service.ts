@@ -3,16 +3,19 @@ import { PrismaService } from '../common/utils/prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { SendSmsDto } from './dto/send-sms.dto';
 import { ConfigService } from '@nestjs/config';
+import { SmsStatus } from '@prisma/client';
 import twilio from 'twilio';
 
 @Injectable()
 export class SmsService {
   private twilioClient: twilio.Twilio;
+  private bypass: boolean;
 
   constructor(private prisma: PrismaService, config: ConfigService) {
+    this.bypass = config.get<string>('TWILIO_BYPASS') === 'true';
     const accountSid = config.get<string>('TWILIO_ACCOUNT_SID') || '';
     const authToken = config.get<string>('TWILIO_AUTH_TOKEN') || '';
-    if (accountSid && authToken) {
+    if (accountSid && authToken && !this.bypass) {
       this.twilioClient = twilio(accountSid, authToken);
     }
   }
@@ -34,6 +37,7 @@ export class SmsService {
             toMobile: to,
             body: dto.body,
             campaignId: dto.campaignId,
+            status: this.bypass ? SmsStatus.SENT : undefined,
           },
         });
         if (this.twilioClient) {
