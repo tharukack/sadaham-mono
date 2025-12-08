@@ -15,6 +15,7 @@ pnpm install
 ```bash
 cp .env.example .env
 # Update DATABASE_URL and Twilio credentials as needed
+# `TWILIO_BYPASS=true` keeps SMS offline and echoes OTP codes in responses for testing
 ```
 
 3. Run Prisma migrations and seed data
@@ -29,5 +30,10 @@ pnpm run seed
 ```bash
 pnpm run dev
 ```
+
+Default seeded admin for quick testing:
+
+- Mobile: `+61400000001`
+- Password: `1234`
 
 API docs and resources are organized by modules under `src/`, while the frontend lives in `web/` using Next.js and React Query.

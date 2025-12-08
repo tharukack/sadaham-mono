@@ -30,6 +30,9 @@ export class AuthService {
     await this.prisma.otpCode.create({
       data: { userId: user.id, code: otpCode, expiresAt },
     });
+    if (this.config.get<string>('TWILIO_BYPASS') === 'true') {
+      return { message: 'OTP bypass enabled for testing', code: otpCode, expiresAt };
+    }
     return { message: 'OTP sent via SMS', expiresAt };
   }
 
