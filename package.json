@@ -5,14 +5,18 @@
   "packageManager": "pnpm@8.15.5",
   "workspaces": ["web"],
   "scripts": {
-    "dev": "concurrently \"pnpm run dev:api\" \"pnpm --filter web dev\"",
+    "dev": "concurrently \"pnpm run dev:api\" \"pnpm --filter order-management-web dev\"",
     "dev:api": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev:web": "pnpm --filter order-management-web dev",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "lint": "echo 'linting not configured'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.6",

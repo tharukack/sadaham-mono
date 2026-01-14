@@ -5,6 +5,6 @@ export class LoginDto {
   mobile!: string;
 
   @IsString()
-  @Length(6, 128)
+  @Length(4, 128)
   password!: string;
 }

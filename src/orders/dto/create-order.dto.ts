@@ -1,8 +1,9 @@
-import { IsInt, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateOrderDto {
+  @IsOptional()
   @IsString()
-  campaignId!: string;
+  campaignId?: string;
 
   @IsString()
   customerId!: string;

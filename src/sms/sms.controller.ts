@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { SmsService } from './sms.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { SendSmsDto } from './dto/send-sms.dto';
@@ -27,5 +27,11 @@ export class SmsController {
   @Roles(Role.ADMIN)
   send(@Body() dto: SendSmsDto) {
     return this.smsService.send(dto);
+  }
+
+  @Get('stats')
+  @Roles(Role.ADMIN, Role.EDITOR, Role.VIEWER)
+  stats(@Query('campaignId') campaignId?: string) {
+    return this.smsService.stats(campaignId);
   }
 }

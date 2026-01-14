@@ -1,22 +1,26 @@
 import Link from 'next/link';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="bg-white shadow rounded p-8 w-full max-w-xl space-y-4">
-        <h1 className="text-2xl font-semibold">Order Management System</h1>
-        <p className="text-gray-700">
-          Full-stack monolith with NestJS, Prisma, PostgreSQL, Twilio SMS OTP, and Next.js UI.
-        </p>
-        <div className="space-x-4">
-          <Link href="/login" className="text-blue-600 hover:underline">
-            Login
-          </Link>
-          <Link href="/dashboard" className="text-blue-600 hover:underline">
-            Dashboard
-          </Link>
-        </div>
-      </div>
+    <main className="flex min-h-screen items-center justify-center p-6">
+      <Card className="w-full max-w-xl">
+        <CardHeader>
+          <CardTitle>Order Management System</CardTitle>
+          <CardDescription>
+            Full-stack monolith with NestJS, Prisma, PostgreSQL, Twilio SMS OTP, and Next.js UI.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href="/login">Login</Link>
+          </Button>
+          <Button variant="secondary" asChild>
+            <Link href="/dashboard">Dashboard</Link>
+          </Button>
+        </CardContent>
+      </Card>
     </main>
   );
 }

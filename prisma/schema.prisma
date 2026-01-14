@@ -42,8 +42,11 @@ model User {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   sessions       UserSession[]
+  otpCodes       OtpCode[]
   createdCustomers Customer[]   @relation("CustomerCreatedBy")
   updatedCustomers Customer[]   @relation("CustomerUpdatedBy")
+  createdOrders  Order[]        @relation("OrderCreatedBy")
+  updatedOrders  Order[]        @relation("OrderUpdatedBy")
 }
 
 model UserSession {
@@ -70,6 +73,7 @@ model Customer {
   firstName   String
   lastName    String
   address     String?
+  deletedAt   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String
@@ -95,6 +99,7 @@ model PickupLocation {
   address           String
   distributorName   String
   distributorMobile String
+  orders            Order[]
 }
 
 model Order {
@@ -110,10 +115,13 @@ model Order {
   vegQty           Int            @default(0)
   eggQty           Int            @default(0)
   otherQty         Int            @default(0)
+  deletedAt        DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   createdById      String
   updatedById      String
+  createdBy        User           @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  updatedBy        User           @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([campaignId, customerId])
 }
