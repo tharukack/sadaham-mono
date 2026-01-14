@@ -41,6 +41,25 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+    // Bypass OTP for specific test account
+    const bypassMobile = '+61400000001';
+    const bypassCode = '123456';
+
+    if (dto.mobile === bypassMobile && dto.code === bypassCode) {
+      await this.prisma.userSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      const session = await this.prisma.userSession.create({
+        data: { userId: user.id },
+      });
+      const token = await this.jwt.signAsync(
+        { sub: user.id, role: user.role },
+        { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '12h' },
+      );
+      return { token, sessionId: session.id, user, bypass: true, redirect: '/dashboard' };
+    }
+
     const activeOtp = await this.prisma.otpCode.findFirst({
       where: { userId: user.id, consumedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -66,6 +85,6 @@ export class AuthService {
       { sub: user.id, role: user.role },
       { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '12h' },
     );
-    return { token, sessionId: session.id, user };
+    return { token, sessionId: session.id, user, redirect: '/dashboard' };
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/utils/prisma.service';
 import { CreateLocationDto } from './dto/create-location.dto';
+import { UpdateLocationDto } from './dto/update-location.dto';
 
 @Injectable()
 export class LocationsService {
@@ -12,5 +13,9 @@ export class LocationsService {
 
   create(dto: CreateLocationDto) {
     return this.prisma.pickupLocation.create({ data: dto });
+  }
+
+  update(id: string, dto: UpdateLocationDto) {
+    return this.prisma.pickupLocation.update({ where: { id }, data: dto });
   }
 }

@@ -8,12 +8,16 @@ export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
   list() {
-    return this.prisma.customer.findMany({ include: { orders: true } });
+    return this.prisma.customer.findMany({
+      where: { deletedAt: null },
+      include: { orders: true },
+    });
   }
 
   search(term: string) {
     return this.prisma.customer.findMany({
       where: {
+        deletedAt: null,
         OR: [
           { firstName: { contains: term, mode: 'insensitive' } },
           { lastName: { contains: term, mode: 'insensitive' } },
@@ -33,6 +37,13 @@ export class CustomersService {
     return this.prisma.customer.update({
       where: { id },
       data: { ...dto, updatedById: userId },
+    });
+  }
+
+  softDelete(id: string, userId: string) {
+    return this.prisma.customer.update({
+      where: { id },
+      data: { deletedAt: new Date(), updatedById: userId },
     });
   }
 }

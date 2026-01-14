@@ -48,4 +48,40 @@ export class SmsService {
     );
     return { sent: messages.length };
   }
+
+  async stats(campaignId?: string) {
+    const groups = await this.prisma.smsMessage.groupBy({
+      by: ['status'],
+      where: campaignId ? { campaignId } : undefined,
+      _count: { _all: true },
+    });
+
+    const summary = {
+      queued: 0,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+    };
+
+    groups.forEach((group) => {
+      switch (group.status) {
+        case SmsStatus.QUEUED:
+          summary.queued = group._count._all;
+          break;
+        case SmsStatus.SENT:
+          summary.sent = group._count._all;
+          break;
+        case SmsStatus.DELIVERED:
+          summary.delivered = group._count._all;
+          break;
+        case SmsStatus.FAILED:
+          summary.failed = group._count._all;
+          break;
+        default:
+          break;
+      }
+    });
+
+    return summary;
+  }
 }
