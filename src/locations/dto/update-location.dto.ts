@@ -16,4 +16,12 @@ export class UpdateLocationDto {
   @IsOptional()
   @IsString()
   distributorMobile?: string;
+
+  @IsOptional()
+  @IsString()
+  distributorCustomerId?: string;
+
+  @IsOptional()
+  @IsString()
+  transporterCustomerId?: string;
 }

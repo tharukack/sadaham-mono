@@ -34,4 +34,12 @@ export class UpdateOrderDto {
   @Min(0)
   @Max(1000)
   otherQty?: number;
+
+  @IsOptional()
+  @IsString()
+  pickupByCustomerId?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }

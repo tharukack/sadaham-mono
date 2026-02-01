@@ -81,6 +81,9 @@ model Customer {
   updatedById String
   updatedBy   User     @relation("CustomerUpdatedBy", fields: [updatedById], references: [id])
   orders      Order[]
+  pickupByOrders Order[] @relation("OrderPickupBy")
+  transporterLocations PickupLocation[] @relation("PickupLocationTransporter")
+  distributorLocations PickupLocation[] @relation("PickupLocationDistributor")
 }
 
 model Campaign {
@@ -90,6 +93,11 @@ model Campaign {
   startedAt DateTime       @default(now())
   frozenAt  DateTime?
   endedAt   DateTime?
+  chickenCost Float        @default(0)
+  fishCost    Float        @default(0)
+  vegCost     Float        @default(0)
+  eggCost     Float        @default(0)
+  otherCost   Float        @default(0)
   orders    Order[]
 }
 
@@ -99,6 +107,10 @@ model PickupLocation {
   address           String
   distributorName   String
   distributorMobile String
+  distributorCustomerId String?
+  distributorCustomer Customer? @relation("PickupLocationDistributor", fields: [distributorCustomerId], references: [id])
+  transporterCustomerId String?
+  transporterCustomer Customer? @relation("PickupLocationTransporter", fields: [transporterCustomerId], references: [id])
   orders            Order[]
 }
 
@@ -108,6 +120,8 @@ model Order {
   campaign         Campaign       @relation(fields: [campaignId], references: [id])
   customerId       String
   customer         Customer       @relation(fields: [customerId], references: [id])
+  pickupByCustomerId String?
+  pickupByCustomer Customer? @relation("OrderPickupBy", fields: [pickupByCustomerId], references: [id])
   pickupLocationId String
   pickupLocation   PickupLocation @relation(fields: [pickupLocationId], references: [id])
   chickenQty       Int            @default(0)
@@ -115,6 +129,7 @@ model Order {
   vegQty           Int            @default(0)
   eggQty           Int            @default(0)
   otherQty         Int            @default(0)
+  note             String?
   deletedAt        DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt

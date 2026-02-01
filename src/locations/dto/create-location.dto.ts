@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateLocationDto {
   @IsString()
@@ -12,4 +12,12 @@ export class CreateLocationDto {
 
   @IsString()
   distributorMobile!: string;
+
+  @IsOptional()
+  @IsString()
+  distributorCustomerId?: string;
+
+  @IsOptional()
+  @IsString()
+  transporterCustomerId?: string;
 }

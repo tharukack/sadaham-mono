@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -10,8 +11,17 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import {
   Command,
   CommandEmpty,
@@ -24,6 +34,7 @@ import { Separator } from '../components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useToast } from '../components/ui/use-toast';
+import { Pencil, Trash2, UserPlus } from 'lucide-react';
 import { KpiCards } from '../components/dashboard/kpi-cards';
 import { OrdersTrendChart } from '../components/dashboard/orders-trend-chart';
 import { MealTotalsChart } from '../components/dashboard/meal-totals-chart';
@@ -37,6 +48,11 @@ type Campaign = {
   startedAt?: string;
   frozenAt?: string | null;
   endedAt?: string | null;
+  chickenCost?: number;
+  fishCost?: number;
+  vegCost?: number;
+  eggCost?: number;
+  otherCost?: number;
 };
 
 type CampaignStats = {
@@ -52,6 +68,7 @@ type CampaignStats = {
 };
 
 export default function Dashboard() {
+  const router = useRouter();
   const [currentRole, setCurrentRole] = useState<string>('');
 
   useEffect(() => {
@@ -65,6 +82,16 @@ export default function Dashboard() {
       setCurrentRole('');
     }
   }, []);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const addOrder = router.query.addOrder;
+    if (addOrder === '1' || addOrder === 'true') {
+      setShowAddModal(true);
+      const { addOrder: _addOrder, ...rest } = router.query;
+      router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query, router]);
 
   const currentCampaignQuery = useQuery({
     queryKey: ['campaign-current'],
@@ -98,53 +125,70 @@ export default function Dashboard() {
     enabled: !!selectedCampaign?.id,
   });
 
-  const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [pickupByLabel, setPickupByLabel] = useState('');
+  const [editPickupByLabel, setEditPickupByLabel] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [addExistingOrderId, setAddExistingOrderId] = useState<string | null>(null);
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [addPickupByOpen, setAddPickupByOpen] = useState(false);
+  const [editPickupByOpen, setEditPickupByOpen] = useState(false);
   const [addLocationOpen, setAddLocationOpen] = useState(false);
   const [editLocationOpen, setEditLocationOpen] = useState(false);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
+  const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'updated' | 'name'>('updated');
   const [addOriginalForm, setAddOriginalForm] = useState({
     pickupLocationId: '',
+    pickupByCustomerId: '',
     chickenQty: 0,
     fishQty: 0,
     vegQty: 0,
     eggQty: 0,
     otherQty: 0,
+    note: '',
   });
   const [editOriginalForm, setEditOriginalForm] = useState({
     pickupLocationId: '',
+    pickupByCustomerId: '',
     chickenQty: 0,
     fishQty: 0,
     vegQty: 0,
     eggQty: 0,
     otherQty: 0,
+    note: '',
   });
   const [orderForm, setOrderForm] = useState({
     pickupLocationId: '',
+    pickupByCustomerId: '',
     chickenQty: 0,
     fishQty: 0,
     vegQty: 0,
     eggQty: 0,
     otherQty: 0,
+    note: '',
   });
   const [editForm, setEditForm] = useState({
     pickupLocationId: '',
+    pickupByCustomerId: '',
     chickenQty: 0,
     fishQty: 0,
     vegQty: 0,
     eggQty: 0,
     otherQty: 0,
+    note: '',
   });
 
-  const customersQuery = useQuery({
-    queryKey: ['customer-search', customerSearch],
-    queryFn: async () => (await api.get('/customers/search', { params: { q: customerSearch } })).data,
-    enabled: !!selectedCampaign?.id && customerSearch.trim().length > 0,
+  const allCustomersQuery = useQuery({
+    queryKey: ['customers-all', selectedCampaign?.id],
+    queryFn: async () => (await api.get('/customers/search', { params: { q: '' } })).data,
+    enabled:
+      !!selectedCampaign?.id &&
+      (showAddModal || showEditModal || addCustomerOpen || addPickupByOpen || editPickupByOpen),
   });
 
   const isAdmin = currentRole === 'ADMIN';
@@ -158,9 +202,45 @@ export default function Dashboard() {
     return (ordersQuery.data || []) as any[];
   }, [ordersQuery.data, selectedCampaign?.id]);
 
+  const sortedOrders = useMemo(() => {
+    const next = [...orders];
+    next.sort((a: any, b: any) => {
+      if (ordersSortBy === 'name') {
+        const aName = `${a.customer?.firstName || ''} ${a.customer?.lastName || ''}`.trim();
+        const bName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.trim();
+        return aName.localeCompare(bName);
+      }
+      const aDate = new Date(
+        ordersSortBy === 'created' ? a.createdAt || 0 : a.updatedAt || 0,
+      ).getTime();
+      const bDate = new Date(
+        ordersSortBy === 'created' ? b.createdAt || 0 : b.updatedAt || 0,
+      ).getTime();
+      return bDate - aDate;
+    });
+    return next;
+  }, [orders, ordersSortBy]);
+
+  const ordersPageCount = useMemo(() => {
+    return Math.max(1, Math.ceil(orders.length / ordersRowsPerPage));
+  }, [orders.length, ordersRowsPerPage]);
+
+  const pagedOrders = useMemo(() => {
+    const start = (ordersPage - 1) * ordersRowsPerPage;
+    return sortedOrders.slice(start, start + ordersRowsPerPage);
+  }, [sortedOrders, ordersPage, ordersRowsPerPage]);
+
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [selectedCampaign?.id, ordersSortBy]);
+
+  useEffect(() => {
+    setOrdersPage((prev) => Math.min(Math.max(prev, 1), ordersPageCount));
+  }, [ordersPageCount]);
+
   const selectedCustomer = useMemo(() => {
-    return (customersQuery.data || []).find((c: any) => c.id === selectedCustomerId);
-  }, [customersQuery.data, selectedCustomerId]);
+    return (allCustomersQuery.data || []).find((c: any) => c.id === selectedCustomerId);
+  }, [allCustomersQuery.data, selectedCustomerId]);
 
   const existingOrderForCustomer = useMemo(() => {
     if (!selectedCampaign?.id || !selectedCustomerId) return null;
@@ -183,19 +263,23 @@ export default function Dashboard() {
   const isAddFormDirty = useMemo(() => {
     const current = {
       pickupLocationId: orderForm.pickupLocationId || '',
+      pickupByCustomerId: orderForm.pickupByCustomerId || '',
       chickenQty: Number(orderForm.chickenQty || 0),
       fishQty: Number(orderForm.fishQty || 0),
       vegQty: Number(orderForm.vegQty || 0),
       eggQty: Number(orderForm.eggQty || 0),
       otherQty: Number(orderForm.otherQty || 0),
+      note: orderForm.note || '',
     };
     const original = {
       pickupLocationId: addOriginalForm.pickupLocationId || '',
+      pickupByCustomerId: addOriginalForm.pickupByCustomerId || '',
       chickenQty: Number(addOriginalForm.chickenQty || 0),
       fishQty: Number(addOriginalForm.fishQty || 0),
       vegQty: Number(addOriginalForm.vegQty || 0),
       eggQty: Number(addOriginalForm.eggQty || 0),
       otherQty: Number(addOriginalForm.otherQty || 0),
+      note: addOriginalForm.note || '',
     };
     return JSON.stringify(current) !== JSON.stringify(original);
   }, [orderForm, addOriginalForm]);
@@ -203,19 +287,23 @@ export default function Dashboard() {
   const isEditFormDirty = useMemo(() => {
     const current = {
       pickupLocationId: editForm.pickupLocationId || '',
+      pickupByCustomerId: editForm.pickupByCustomerId || '',
       chickenQty: Number(editForm.chickenQty || 0),
       fishQty: Number(editForm.fishQty || 0),
       vegQty: Number(editForm.vegQty || 0),
       eggQty: Number(editForm.eggQty || 0),
       otherQty: Number(editForm.otherQty || 0),
+      note: editForm.note || '',
     };
     const original = {
       pickupLocationId: editOriginalForm.pickupLocationId || '',
+      pickupByCustomerId: editOriginalForm.pickupByCustomerId || '',
       chickenQty: Number(editOriginalForm.chickenQty || 0),
       fishQty: Number(editOriginalForm.fishQty || 0),
       vegQty: Number(editOriginalForm.vegQty || 0),
       eggQty: Number(editOriginalForm.eggQty || 0),
       otherQty: Number(editOriginalForm.otherQty || 0),
+      note: editOriginalForm.note || '',
     };
     return JSON.stringify(current) !== JSON.stringify(original);
   }, [editForm, editOriginalForm]);
@@ -249,56 +337,103 @@ export default function Dashboard() {
   const canSubmitEdit =
     canEditOrders && !!editForm.pickupLocationId && editMealTotal > 0 && isEditFormDirty;
 
+  const getMealDetails = (order: any) => {
+    const meals = [
+      { label: 'Chicken', qty: Number(order.chickenQty || 0) },
+      { label: 'Fish', qty: Number(order.fishQty || 0) },
+      { label: 'Veg', qty: Number(order.vegQty || 0) },
+      { label: 'Egg', qty: Number(order.eggQty || 0) },
+      { label: 'Other', qty: Number(order.otherQty || 0) },
+    ];
+    const total = meals.reduce((sum, meal) => sum + meal.qty, 0);
+    return { total, meals: meals.filter((meal) => meal.qty > 0) };
+  };
+
+  const getOrderCost = (order: any) => {
+    const chickenCost = selectedCampaign?.chickenCost || 0;
+    const fishCost = selectedCampaign?.fishCost || 0;
+    const vegCost = selectedCampaign?.vegCost || 0;
+    const eggCost = selectedCampaign?.eggCost || 0;
+    const otherCost = selectedCampaign?.otherCost || 0;
+    return (
+      Number(order.chickenQty || 0) * chickenCost +
+      Number(order.fishQty || 0) * fishCost +
+      Number(order.vegQty || 0) * vegCost +
+      Number(order.eggQty || 0) * eggCost +
+      Number(order.otherQty || 0) * otherCost
+    );
+  };
+
   useEffect(() => {
     if (!selectedCustomerId) {
       setAddExistingOrderId(null);
       setAddOriginalForm({
         pickupLocationId: '',
+        pickupByCustomerId: '',
         chickenQty: 0,
         fishQty: 0,
         vegQty: 0,
         eggQty: 0,
         otherQty: 0,
+        note: '',
       });
       return;
     }
     if (existingOrderForCustomer) {
       const base = {
         pickupLocationId: existingOrderForCustomer.pickupLocationId || '',
+        pickupByCustomerId:
+          existingOrderForCustomer.pickupByCustomerId || existingOrderForCustomer.customerId || '',
         chickenQty: existingOrderForCustomer.chickenQty || 0,
         fishQty: existingOrderForCustomer.fishQty || 0,
         vegQty: existingOrderForCustomer.vegQty || 0,
         eggQty: existingOrderForCustomer.eggQty || 0,
         otherQty: existingOrderForCustomer.otherQty || 0,
+        note: existingOrderForCustomer.note || '',
       };
       setAddExistingOrderId(existingOrderForCustomer.id);
       setAddOriginalForm(base);
       setOrderForm(base);
+      setPickupByLabel(
+        existingOrderForCustomer.pickupByCustomer
+          ? `${existingOrderForCustomer.pickupByCustomer.firstName} ${existingOrderForCustomer.pickupByCustomer.lastName}`.trim()
+          : `${existingOrderForCustomer.customer?.firstName || ''} ${existingOrderForCustomer.customer?.lastName || ''}`.trim()
+      );
     } else {
       const empty = {
         pickupLocationId: '',
+        pickupByCustomerId: selectedCustomerId || '',
         chickenQty: 0,
         fishQty: 0,
         vegQty: 0,
         eggQty: 0,
         otherQty: 0,
+        note: '',
       };
       setAddExistingOrderId(null);
       setAddOriginalForm(empty);
       setOrderForm(empty);
+      setPickupByLabel('');
     }
   }, [selectedCustomerId, existingOrderForCustomer]);
 
   const startEdit = (order: any) => {
     setEditingOrderId(order.id);
     setShowEditModal(true);
+    setEditPickupByLabel(
+      order.pickupByCustomer
+        ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
+        : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()
+    );
     const base = {
       pickupLocationId: order.pickupLocationId || '',
+      pickupByCustomerId: order.pickupByCustomerId || order.customerId || '',
       chickenQty: order.chickenQty || 0,
       fishQty: order.fishQty || 0,
       vegQty: order.vegQty || 0,
       eggQty: order.eggQty || 0,
       otherQty: order.otherQty || 0,
+      note: order.note || '',
     };
     setEditOriginalForm(base);
     setEditForm(base);
@@ -312,11 +447,13 @@ export default function Dashboard() {
       const payload = {
         customerId: selectedCustomerId,
         pickupLocationId: orderForm.pickupLocationId,
+        pickupByCustomerId: orderForm.pickupByCustomerId || selectedCustomerId,
         chickenQty: Number(orderForm.chickenQty || 0),
         fishQty: Number(orderForm.fishQty || 0),
         vegQty: Number(orderForm.vegQty || 0),
         eggQty: Number(orderForm.eggQty || 0),
         otherQty: Number(orderForm.otherQty || 0),
+        note: orderForm.note || undefined,
       };
       if (addExistingOrderId) {
         await api.patch(`/orders/${addExistingOrderId}`, payload);
@@ -324,23 +461,28 @@ export default function Dashboard() {
         await api.post('/orders', payload);
       }
       setSelectedCustomerId('');
-      setCustomerSearch('');
+      setPickupByLabel('');
+      setPickupByLabel('');
       setOrderForm({
         pickupLocationId: '',
+        pickupByCustomerId: '',
         chickenQty: 0,
         fishQty: 0,
         vegQty: 0,
         eggQty: 0,
         otherQty: 0,
+        note: '',
       });
       setAddExistingOrderId(null);
       setAddOriginalForm({
         pickupLocationId: '',
+        pickupByCustomerId: '',
         chickenQty: 0,
         fishQty: 0,
         vegQty: 0,
         eggQty: 0,
         otherQty: 0,
+        note: '',
       });
       await ordersQuery.refetch();
       await statsQuery.refetch();
@@ -364,14 +506,17 @@ export default function Dashboard() {
     try {
       await api.patch(`/orders/${editingOrderId}`, {
         pickupLocationId: editForm.pickupLocationId,
+        pickupByCustomerId: editForm.pickupByCustomerId || undefined,
         chickenQty: Number(editForm.chickenQty || 0),
         fishQty: Number(editForm.fishQty || 0),
         vegQty: Number(editForm.vegQty || 0),
         eggQty: Number(editForm.eggQty || 0),
         otherQty: Number(editForm.otherQty || 0),
+        note: editForm.note || undefined,
       });
       setEditingOrderId(null);
       setShowEditModal(false);
+      setEditPickupByLabel('');
       await ordersQuery.refetch();
       await statsQuery.refetch();
       toast({ title: 'Order updated' });
@@ -438,6 +583,124 @@ export default function Dashboard() {
       </Popover>
     );
   };
+
+  const CustomerPicker = ({
+    value,
+    onChange,
+    disabled,
+    open,
+    onOpenChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    disabled?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  }) => {
+    const selected = (allCustomersQuery.data || []).find((c: any) => c.id === value) || selectedCustomer;
+
+    return (
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="justify-between" disabled={disabled}>
+            {selected ? `${selected.firstName} ${selected.lastName}`.trim() : 'Select customer'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search by name or mobile" />
+            <CommandList>
+              {allCustomersQuery.isLoading ? (
+                <CommandEmpty>Loading customers...</CommandEmpty>
+              ) : (allCustomersQuery.data || []).length === 0 ? (
+                <CommandEmpty>No customers found.</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {(allCustomersQuery.data || []).map((c: any) => (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.firstName} ${c.lastName} ${c.mobile}`}
+                      onSelect={() => {
+                        onChange(c.id);
+                        onOpenChange(false);
+                      }}
+                    >
+                      <div className="text-left">
+                        <div className="text-sm font-medium">
+                          {c.firstName} {c.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const PickupByPicker = ({
+    value: _value,
+    onChange,
+    disabled,
+    open,
+    onOpenChange,
+    label,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    disabled?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    label?: string;
+  }) => {
+    return (
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="justify-between" disabled={disabled}>
+            {label || 'Select pickup person'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search pickup person by name or mobile" />
+            <CommandList>
+              {allCustomersQuery.isLoading ? (
+                <CommandEmpty>Loading customers...</CommandEmpty>
+              ) : (allCustomersQuery.data || []).length === 0 ? (
+                <CommandEmpty>No customers found.</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {(allCustomersQuery.data || []).map((c: any) => (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.firstName} ${c.lastName} ${c.mobile}`}
+                      onSelect={() => {
+                        onChange(c.id);
+                        setPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
+                        setEditPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
+                        onOpenChange(false);
+                      }}
+                    >
+                      <div className="text-left">
+                        <div className="text-sm font-medium">
+                          {c.firstName} {c.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
   const emptyOrders = useMemo(
     () =>
       stats?.orders ?? {
@@ -492,11 +755,7 @@ export default function Dashboard() {
       <PageHeader title="Dashboard" description="Campaign performance and operational insights." />
 
       <Card>
-        <CardHeader className="space-y-3">
-          <CardTitle>Campaign Overview</CardTitle>
-          <Separator />
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoadingCampaigns ? (
             <div className="text-sm text-muted-foreground">Loading campaigns...</div>
           ) : !selectedCampaign ? (
@@ -511,23 +770,23 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="text-lg font-semibold">{selectedCampaign.name}</div>
-                <Badge variant="secondary">{selectedCampaign.state}</Badge>
-                {isFallback && (
-                  <span className="text-sm text-muted-foreground">
-                    Showing last ended campaign
-                  </span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="text-lg font-semibold">{selectedCampaign.name}</div>
+                  <Badge variant="secondary">{selectedCampaign.state}</Badge>
+                  <Badge variant="outline">Orders: {orders.length}</Badge>
+                  {isFallback && (
+                    <span className="text-sm text-muted-foreground">
+                      Showing last ended campaign
+                    </span>
+                  )}
+                </div>
+                {canCreateOrders && (
+                  <Button onClick={() => setShowAddModal(true)}>Add Order</Button>
                 )}
               </div>
               <Separator />
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm font-medium">Orders</div>
-                  {canCreateOrders && (
-                    <Button onClick={() => setShowAddModal(true)}>Add Order</Button>
-                  )}
-                </div>
                 {ordersQuery.isLoading ? (
                   <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
                     Loading orders...
@@ -537,35 +796,68 @@ export default function Dashboard() {
                     No orders in this campaign.
                   </div>
                 ) : (
-                  <Table>
+                  <div className="space-y-3">
+                    <div className="w-full overflow-x-auto">
+                    <Table className="min-w-[1100px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Customer</TableHead>
+                      <TableRow className="whitespace-nowrap">
+                        <TableHead className="sticky left-0 z-10 bg-background">
+                          Customer
+                        </TableHead>
                         <TableHead>Pickup Location</TableHead>
-                        <TableHead>Meals</TableHead>
+                        <TableHead>Pickup By</TableHead>
+                        <TableHead>Meal Packets</TableHead>
+                        <TableHead className="text-right">Total Cost</TableHead>
+                        <TableHead>Note</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {orders.map((order: any) => {
-                        const mealCount =
-                          Number(order.chickenQty || 0) +
-                          Number(order.fishQty || 0) +
-                          Number(order.vegQty || 0) +
-                          Number(order.eggQty || 0) +
-                          Number(order.otherQty || 0);
+                      {pagedOrders.map((order: any) => {
+                        const mealDetails = getMealDetails(order);
                         const isDeleted = !!order.deletedAt;
                         return (
-                          <TableRow key={order.id}>
-                            <TableCell className="font-medium">
+                          <TableRow key={order.id} className="whitespace-nowrap">
+                            <TableCell className="sticky left-0 z-10 bg-background font-medium">
                               {order.customer?.firstName} {order.customer?.lastName}
                             </TableCell>
                             <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
                             <TableCell>
-                              C:{order.chickenQty || 0} F:{order.fishQty || 0} V:
-                              {order.vegQty || 0} E:{order.eggQty || 0} O:
-                              {order.otherQty || 0}
+                              {order.pickupByCustomer
+                                ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
+                                : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <span className="text-sm font-medium">
+                                  Total: {mealDetails.total}
+                                </span>
+                                {mealDetails.meals.length === 0 ? (
+                                  <span className="text-xs text-muted-foreground">No meals</span>
+                                ) : (
+                                  mealDetails.meals.map((meal) => (
+                                    <Badge key={meal.label} variant="secondary">
+                                      {meal.label} {meal.qty}
+                                    </Badge>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {getOrderCost(order).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
+                              {order.note ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="cursor-help">{order.note}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{order.note}</TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                '-'
+                              )}
                             </TableCell>
                             <TableCell>
                               {isDeleted ? (
@@ -588,21 +880,25 @@ export default function Dashboard() {
                                   <span className="text-xs text-muted-foreground">Deleted</span>
                                 )
                               ) : canEditOrders ? (
-                                <div className="flex justify-end gap-2">
+                                <div className="flex justify-end gap-1">
                                   <Button
-                                    size="sm"
+                                    size="icon"
                                     variant="secondary"
+                                    className="h-7 w-7"
                                     onClick={() => startEdit(order)}
+                                    aria-label="Edit order"
                                   >
-                                    Edit
+                                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
                                   <Button
-                                    size="sm"
+                                    size="icon"
                                     variant="destructive"
+                                    className="h-7 w-7"
                                     onClick={() => deleteOrder(order.id)}
                                     disabled={!canDeleteOrders}
+                                    aria-label="Delete order"
                                   >
-                                    Delete
+                                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
                                 </div>
                               ) : (
@@ -614,6 +910,81 @@ export default function Dashboard() {
                       })}
                     </TableBody>
                   </Table>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span>Sort by</span>
+                          <Select
+                            value={ordersSortBy}
+                            onValueChange={(value) =>
+                              setOrdersSortBy(value as 'created' | 'updated' | 'name')
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[170px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              <SelectItem value="updated">Date modified</SelectItem>
+                              <SelectItem value="created">Date created</SelectItem>
+                              <SelectItem value="name">Name</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>Rows per page</span>
+                        <Select
+                          value={String(ordersRowsPerPage)}
+                          onValueChange={(value) => {
+                            const parsed = Number(value);
+                            setOrdersRowsPerPage(parsed);
+                            setOrdersPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[90px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>
+                          {orders.length === 0
+                            ? '0 of 0'
+                            : `${(ordersPage - 1) * ordersRowsPerPage + 1}-${Math.min(
+                                ordersPage * ordersRowsPerPage,
+                                orders.length
+                              )} of ${orders.length}`}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setOrdersPage((prev) => Math.max(1, prev - 1))}
+                            disabled={ordersPage <= 1}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setOrdersPage((prev) => Math.min(ordersPageCount, prev + 1))
+                            }
+                            disabled={ordersPage >= ordersPageCount}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -728,73 +1099,95 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Add Order</DialogTitle>
           </DialogHeader>
-          <form onSubmit={submitOrder} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Find Customer</Label>
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  placeholder="Search by name or mobile"
-                  disabled={!canCreateOrders}
-                />
-                {canCreateOrders ? (
-                  <Button type="button" variant="secondary" asChild>
-                    <Link href="/customers/search">Add Customer</Link>
-                  </Button>
-                ) : (
-                  <Button type="button" variant="secondary" disabled>
-                    Add Customer
-                  </Button>
-                )}
-              </div>
-            </div>
-            {customerSearch.trim().length > 0 && (
-              <div className="rounded-md border">
-                {customersQuery.isLoading ? (
-                  <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
-                ) : (customersQuery.data || []).length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
-                ) : (
-                  (customersQuery.data || []).map((c: any) => (
+          <form onSubmit={submitOrder} className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-3 rounded-md border bg-muted/20 p-4">
+                <div className="flex min-h-[32px] items-center justify-between gap-2 border-b pb-2">
+                  <div className="text-sm font-semibold">Find Customer</div>
+                  {canCreateOrders ? (
                     <Button
-                      key={c.id}
-                      type="button"
-                      variant={selectedCustomerId === c.id ? 'secondary' : 'ghost'}
-                      className="w-full justify-start rounded-none"
-                      onClick={() => setSelectedCustomerId(c.id)}
-                      disabled={!canCreateOrders}
+                      size="icon"
+                      variant="outline"
+                      className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      asChild
                     >
-                      <div className="text-left">
-                        <div className="text-sm font-medium">
-                          {c.firstName} {c.lastName}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
-                      </div>
+                      <Link href="/customers/search" aria-label="Add customer">
+                        <UserPlus className="h-4 w-4" aria-hidden="true" />
+                      </Link>
                     </Button>
-                  ))
+                  ) : (
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      disabled
+                      aria-label="Add customer"
+                    >
+                      <UserPlus className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <CustomerPicker
+                    value={selectedCustomerId}
+                    onChange={(value) => {
+                      setSelectedCustomerId(value);
+                      setOrderForm((prev) => ({
+                        ...prev,
+                        pickupByCustomerId: prev.pickupByCustomerId || value,
+                      }));
+                    }}
+                    disabled={!canCreateOrders}
+                    open={addCustomerOpen}
+                    onOpenChange={setAddCustomerOpen}
+                  />
+                </div>
+                {selectedCustomer && (
+                  <div className="text-sm text-muted-foreground">
+                    Selected: {selectedCustomer.firstName} {selectedCustomer.lastName}
+                  </div>
+                )}
+                {addExistingOrderId && (
+                  <div className="text-sm text-amber-700">
+                    This customer already has an order. Saving will update the existing order.
+                  </div>
                 )}
               </div>
-            )}
-            {selectedCustomer && (
-              <div className="text-sm text-muted-foreground">
-                Selected: {selectedCustomer.firstName} {selectedCustomer.lastName}
+              <div className="space-y-3 rounded-md border bg-muted/20 p-4">
+                <div className="flex min-h-[32px] items-center justify-between gap-2 border-b pb-2">
+                  <div className="text-sm font-semibold">Order Pickup By</div>
+                  <span className="invisible inline-flex h-8 w-8" aria-hidden="true" />
+                </div>
+                <PickupByPicker
+                  value={orderForm.pickupByCustomerId}
+                  onChange={(value) => setOrderForm({ ...orderForm, pickupByCustomerId: value })}
+                  disabled={!canCreateOrders}
+                  open={addPickupByOpen}
+                  onOpenChange={setAddPickupByOpen}
+                  label={pickupByLabel || 'Select pickup person'}
+                />
+                <div className="text-sm text-muted-foreground">
+                  Pickup by:{' '}
+                  {orderForm.pickupByCustomerId
+                    ? pickupByLabel || 'Selected'
+                    : selectedCustomerId
+                    ? 'Same as customer'
+                    : 'Not selected'}
+                </div>
               </div>
-            )}
-            {addExistingOrderId && (
-              <div className="text-sm text-amber-700">
-                This customer already has an order. Saving will update the existing order.
+              <div className="space-y-3 rounded-md border bg-muted/20 p-4">
+                <div className="flex min-h-[32px] items-center justify-between gap-2 border-b pb-2">
+                  <div className="text-sm font-semibold">Pickup Location</div>
+                  <span className="invisible inline-flex h-8 w-8" aria-hidden="true" />
+                </div>
+                <LocationPicker
+                  value={orderForm.pickupLocationId}
+                  onChange={(value) => setOrderForm({ ...orderForm, pickupLocationId: value })}
+                  disabled={!canCreateOrders}
+                  open={addLocationOpen}
+                  onOpenChange={setAddLocationOpen}
+                />
               </div>
-            )}
-            <div className="space-y-2">
-              <Label>Pickup Location</Label>
-              <LocationPicker
-                value={orderForm.pickupLocationId}
-                onChange={(value) => setOrderForm({ ...orderForm, pickupLocationId: value })}
-                disabled={!canCreateOrders}
-                open={addLocationOpen}
-                onOpenChange={setAddLocationOpen}
-              />
             </div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <div className="space-y-2">
@@ -863,6 +1256,16 @@ export default function Dashboard() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="dash-add-note">Order Note</Label>
+              <Textarea
+                id="dash-add-note"
+                value={orderForm.note}
+                onChange={(e) => setOrderForm({ ...orderForm, note: e.target.value })}
+                placeholder="Add a quick note for this order"
+                disabled={!canCreateOrders}
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={!canSubmitAdd || orderSaving}>
                 {orderSaving ? 'Saving...' : addExistingOrderId ? 'Save Changes' : 'Save Order'}
@@ -910,6 +1313,21 @@ export default function Dashboard() {
                 open={editLocationOpen}
                 onOpenChange={setEditLocationOpen}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Order Pickup By</Label>
+              <PickupByPicker
+                value={editForm.pickupByCustomerId || ''}
+                onChange={(value) => setEditForm({ ...editForm, pickupByCustomerId: value })}
+                disabled={!canEditOrders}
+                open={editPickupByOpen}
+                onOpenChange={setEditPickupByOpen}
+                label={editPickupByLabel || 'Select pickup person'}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Pickup by:{' '}
+              {editForm.pickupByCustomerId ? editPickupByLabel || 'Selected' : 'Same as customer'}
             </div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <div className="space-y-2">
@@ -977,6 +1395,16 @@ export default function Dashboard() {
                   disabled={!canEditOrders}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dash-edit-note">Order Note</Label>
+              <Textarea
+                id="dash-edit-note"
+                value={editForm.note}
+                onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
+                placeholder="Add a quick note for this order"
+                disabled={!canEditOrders}
+              />
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={!canSubmitEdit || editSaving}>

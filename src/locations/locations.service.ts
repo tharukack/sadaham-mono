@@ -8,7 +8,10 @@ export class LocationsService {
   constructor(private prisma: PrismaService) {}
 
   list() {
-    return this.prisma.pickupLocation.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.pickupLocation.findMany({
+      orderBy: { name: 'asc' },
+      include: { transporterCustomer: true, distributorCustomer: true },
+    });
   }
 
   create(dto: CreateLocationDto) {

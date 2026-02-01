@@ -21,6 +21,10 @@ export default function LocationsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [distributorSearch, setDistributorSearch] = useState('');
+  const [distributorLabel, setDistributorLabel] = useState('');
+  const [transporterSearch, setTransporterSearch] = useState('');
+  const [transporterLabel, setTransporterLabel] = useState('');
   const { toast } = useToast();
 
   const isAdmin = currentRole === 'ADMIN';
@@ -30,6 +34,8 @@ export default function LocationsPage() {
     address: '',
     distributorName: '',
     distributorMobile: '',
+    distributorCustomerId: '',
+    transporterCustomerId: '',
   });
 
   useEffect(() => {
@@ -57,7 +63,32 @@ export default function LocationsPage() {
       address: editingLocation.address || '',
       distributorName: editingLocation.distributorName || '',
       distributorMobile: editingLocation.distributorMobile || '',
+      distributorCustomerId: editingLocation.distributorCustomerId || '',
+      transporterCustomerId: editingLocation.transporterCustomerId || '',
     });
+    if (editingLocation.distributorCustomer) {
+      const fullName = `${editingLocation.distributorCustomer.firstName} ${editingLocation.distributorCustomer.lastName}`.trim();
+      const mobile = editingLocation.distributorCustomer.mobile
+        ? ` (${editingLocation.distributorCustomer.mobile})`
+        : '';
+      setDistributorLabel(`${fullName}${mobile}`);
+    } else if (editingLocation.distributorName || editingLocation.distributorMobile) {
+      const mobile = editingLocation.distributorMobile
+        ? ` (${editingLocation.distributorMobile})`
+        : '';
+      setDistributorLabel(`${editingLocation.distributorName || 'Distributor'}${mobile}`);
+    } else {
+      setDistributorLabel('');
+    }
+    if (editingLocation.transporterCustomer) {
+      const fullName = `${editingLocation.transporterCustomer.firstName} ${editingLocation.transporterCustomer.lastName}`.trim();
+      const mobile = editingLocation.transporterCustomer.mobile
+        ? ` (${editingLocation.transporterCustomer.mobile})`
+        : '';
+      setTransporterLabel(`${fullName}${mobile}`);
+    } else {
+      setTransporterLabel('');
+    }
   }, [editingLocation]);
 
   const resetForm = () => {
@@ -66,10 +97,30 @@ export default function LocationsPage() {
       address: '',
       distributorName: '',
       distributorMobile: '',
+      distributorCustomerId: '',
+      transporterCustomerId: '',
     });
     setEditingId(null);
     setShowForm(false);
+    setDistributorSearch('');
+    setDistributorLabel('');
+    setTransporterSearch('');
+    setTransporterLabel('');
   };
+
+  const distributorQuery = useQuery({
+    queryKey: ['distributor-search', distributorSearch],
+    queryFn: async () =>
+      (await api.get('/customers/search', { params: { q: distributorSearch } })).data,
+    enabled: isAdmin && distributorSearch.trim().length > 0,
+  });
+
+  const transporterQuery = useQuery({
+    queryKey: ['transporter-search', transporterSearch],
+    queryFn: async () =>
+      (await api.get('/customers/search', { params: { q: transporterSearch } })).data,
+    enabled: isAdmin && transporterSearch.trim().length > 0,
+  });
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -139,24 +190,102 @@ export default function LocationsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="location-distributor-name">Distributor Name</Label>
+              <Label>Distributor</Label>
               <Input
-                id="location-distributor-name"
-                value={form.distributorName}
-                onChange={(e) => setForm({ ...form, distributorName: e.target.value })}
-                required
+                value={distributorSearch}
+                onChange={(e) => setDistributorSearch(e.target.value)}
+                placeholder="Search customer by name or mobile"
                 disabled={!isAdmin}
               />
             </div>
+            {distributorSearch.trim().length > 0 && (
+              <div className="rounded-md border">
+                {distributorQuery.isLoading ? (
+                  <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
+                ) : (distributorQuery.data || []).length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
+                ) : (
+                  (distributorQuery.data || []).map((c: any) => (
+                    <Button
+                      key={c.id}
+                      type="button"
+                      variant={form.distributorCustomerId === c.id ? 'secondary' : 'ghost'}
+                      className="w-full justify-start rounded-none"
+                      onClick={() => {
+                        setForm({
+                          ...form,
+                          distributorCustomerId: c.id,
+                          distributorName: `${c.firstName} ${c.lastName}`.trim(),
+                          distributorMobile: c.mobile || '',
+                        });
+                        const fullName = `${c.firstName} ${c.lastName}`.trim();
+                        const mobile = c.mobile ? ` (${c.mobile})` : '';
+                        setDistributorLabel(`${fullName}${mobile}`);
+                        setDistributorSearch('');
+                      }}
+                      disabled={!isAdmin}
+                    >
+                      <div className="text-left">
+                        <div className="text-sm font-medium">
+                          {c.firstName} {c.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                      </div>
+                    </Button>
+                  ))
+                )}
+              </div>
+            )}
+            <div className="text-sm text-muted-foreground">
+              Distributor:{' '}
+              {form.distributorCustomerId
+                ? distributorLabel || 'Selected'
+                : form.distributorName || 'Not selected'}
+            </div>
             <div className="space-y-2">
-              <Label htmlFor="location-distributor-mobile">Distributor Mobile</Label>
+              <Label>Transporter (Customer)</Label>
               <Input
-                id="location-distributor-mobile"
-                value={form.distributorMobile}
-                onChange={(e) => setForm({ ...form, distributorMobile: e.target.value })}
-                required
+                value={transporterSearch}
+                onChange={(e) => setTransporterSearch(e.target.value)}
+                placeholder="Search customer by name or mobile"
                 disabled={!isAdmin}
               />
+            </div>
+            {transporterSearch.trim().length > 0 && (
+              <div className="rounded-md border">
+                {transporterQuery.isLoading ? (
+                  <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
+                ) : (transporterQuery.data || []).length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
+                ) : (
+                  (transporterQuery.data || []).map((c: any) => (
+                    <Button
+                      key={c.id}
+                      type="button"
+                      variant={form.transporterCustomerId === c.id ? 'secondary' : 'ghost'}
+                      className="w-full justify-start rounded-none"
+                      onClick={() => {
+                        setForm({ ...form, transporterCustomerId: c.id });
+                        const fullName = `${c.firstName} ${c.lastName}`.trim();
+                        const mobile = c.mobile ? ` (${c.mobile})` : '';
+                        setTransporterLabel(`${fullName}${mobile}`);
+                        setTransporterSearch('');
+                      }}
+                      disabled={!isAdmin}
+                    >
+                      <div className="text-left">
+                        <div className="text-sm font-medium">
+                          {c.firstName} {c.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                      </div>
+                    </Button>
+                  ))
+                )}
+              </div>
+            )}
+            <div className="text-sm text-muted-foreground">
+              Transporter: {form.transporterCustomerId ? transporterLabel || 'Selected' : 'Not selected'}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={!isAdmin || formLoading}>
@@ -193,6 +322,7 @@ export default function LocationsPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Distributor</TableHead>
+                  <TableHead>Transporter</TableHead>
                   {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -202,7 +332,37 @@ export default function LocationsPage() {
                     <TableCell className="font-medium">{loc.name}</TableCell>
                     <TableCell>{loc.address}</TableCell>
                     <TableCell>
-                      {loc.distributorName} ({loc.distributorMobile})
+                      {loc.distributorCustomer ? (
+                        <>
+                          <div className="text-sm font-medium">
+                            {`${loc.distributorCustomer.firstName} ${loc.distributorCustomer.lastName}`.trim()}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {loc.distributorCustomer.mobile || '-'}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-sm font-medium">{loc.distributorName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {loc.distributorMobile}
+                          </div>
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {loc.transporterCustomer ? (
+                        <>
+                          <div className="text-sm font-medium">
+                            {`${loc.transporterCustomer.firstName} ${loc.transporterCustomer.lastName}`.trim()}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {loc.transporterCustomer.mobile || '-'}
+                          </div>
+                        </>
+                      ) : (
+                        '-'
+                      )}
                     </TableCell>
                     {isAdmin && (
                       <TableCell className="text-right">
