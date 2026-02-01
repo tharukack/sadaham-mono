@@ -24,6 +24,7 @@ export class CustomersService {
           { mobile: { contains: term } },
         ],
       },
+      include: { createdBy: true },
     });
   }
 

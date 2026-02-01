@@ -26,7 +26,7 @@ export class CampaignsService {
     }
     return this.prisma.order.findMany({
       where: { campaignId: id },
-      include: { customer: true, pickupLocation: true, createdBy: true, updatedBy: true },
+      include: { customer: true, pickupByCustomer: true, pickupLocation: true, createdBy: true, updatedBy: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -152,6 +152,11 @@ export class CampaignsService {
         startedAt: campaign.startedAt,
         frozenAt: campaign.frozenAt,
         endedAt: campaign.endedAt,
+        chickenCost: campaign.chickenCost,
+        fishCost: campaign.fishCost,
+        vegCost: campaign.vegCost,
+        eggCost: campaign.eggCost,
+        otherCost: campaign.otherCost,
       },
       orders: {
         totalOrders,

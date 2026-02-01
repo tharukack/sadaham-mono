@@ -3,6 +3,83 @@ import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+const nameSeeds = {
+  first: [
+    'Ava',
+    'Liam',
+    'Noah',
+    'Mia',
+    'Ethan',
+    'Zoe',
+    'Lucas',
+    'Amelia',
+    'Oliver',
+    'Sophia',
+    'Mason',
+    'Isla',
+    'Leo',
+    'Grace',
+    'Henry',
+    'Nora',
+    'Aria',
+    'Elijah',
+    'Chloe',
+    'Jack',
+  ],
+  last: [
+    'Patel',
+    'Nguyen',
+    'Williams',
+    'Brown',
+    'Singh',
+    'Garcia',
+    'Johnson',
+    'Martin',
+    'Davis',
+    'Lopez',
+    'Smith',
+    'Khan',
+    'Chen',
+    'Wilson',
+    'Taylor',
+    'Anderson',
+  ],
+  streets: [
+    'River Road',
+    'King Street',
+    'Sunset Ave',
+    'Hillcrest Dr',
+    'Maple Lane',
+    'Oxford St',
+    'Garden Walk',
+    'Lakeside Blvd',
+    'Market Street',
+    'Highland Way',
+  ],
+  suburbs: [
+    'Riverview',
+    'Brookside',
+    'Hillpark',
+    'Seaview',
+    'Greenfield',
+    'Lakeshore',
+    'Eastwood',
+    'Westgate',
+  ],
+};
+
+function mulberry32(seed: number) {
+  return () => {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const rand = mulberry32(20260128);
+const pick = (items: string[]) => items[Math.floor(rand() * items.length)];
+
 async function main() {
   const passwordHash = await bcrypt.hash('1234', 10);
 
@@ -80,20 +157,25 @@ async function main() {
   );
 
   const customers = await Promise.all(
-    Array.from({ length: 10 }).map((_, index) =>
-      prisma.customer.upsert({
-        where: { mobile: `+6141000001${index}` },
+    Array.from({ length: 60 }).map((_, index) => {
+      const firstName = pick(nameSeeds.first);
+      const lastName = pick(nameSeeds.last);
+      const streetNo = 10 + Math.floor(rand() * 890);
+      const street = pick(nameSeeds.streets);
+      const suburb = pick(nameSeeds.suburbs);
+      return prisma.customer.upsert({
+        where: { mobile: `+61420000${String(index).padStart(3, '0')}` },
         update: {},
         create: {
-          mobile: `+6141000001${index}`,
-          firstName: `Customer ${index + 1}`,
-          lastName: 'Sample',
-          address: `${index + 1} Sample Street`,
+          mobile: `+61420000${String(index).padStart(3, '0')}`,
+          firstName,
+          lastName,
+          address: `${streetNo} ${street}, ${suburb}`,
           createdById: admin.id,
           updatedById: admin.id,
         },
-      }),
-    ),
+      });
+    }),
   );
 
   await Promise.all(
@@ -105,10 +187,10 @@ async function main() {
           campaignId: campaign.id,
           customerId: customer.id,
           pickupLocationId: pickupLocations[idx % pickupLocations.length].id,
-          chickenQty: idx,
-          fishQty: 0,
-          vegQty: 1,
-          eggQty: 0,
+          chickenQty: (idx % 5) + 1,
+          fishQty: idx % 2,
+          vegQty: 1 + (idx % 3),
+          eggQty: idx % 2,
           otherQty: 0,
           createdById: admin.id,
           updatedById: admin.id,

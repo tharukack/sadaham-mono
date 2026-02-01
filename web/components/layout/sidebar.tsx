@@ -30,7 +30,7 @@ const navSections = [
     items: [
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/campaign', label: 'Campaigns', icon: ClipboardList },
-      { href: '/admin/locations', label: 'Locations', icon: MapPin },
+      { href: '/admin/locations', label: 'Pickup Locations', icon: MapPin },
       { href: '/admin/sms', label: 'SMS Templates', icon: MessageSquare },
       { href: '/admin/audit', label: 'Audit Log', icon: ShieldCheck },
     ],

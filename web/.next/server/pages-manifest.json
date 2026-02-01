@@ -2,6 +2,11 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/admin/campaign": "pages/admin/campaign.js",
   "/orders": "pages/orders.js",
-  "/dashboard": "pages/dashboard.js"
+  "/dashboard": "pages/dashboard.js",
+  "/admin/users": "pages/admin/users.js",
+  "/admin/locations": "pages/admin/locations.js",
+  "/admin/sms": "pages/admin/sms.js",
+  "/admin/audit": "pages/admin/audit.js"
 }
