@@ -10,6 +10,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../components/ui/use-toast';
+import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
 
 export default function LocationsPage() {
   const queryClient = useQueryClient();
@@ -62,19 +63,19 @@ export default function LocationsPage() {
       name: editingLocation.name || '',
       address: editingLocation.address || '',
       distributorName: editingLocation.distributorName || '',
-      distributorMobile: editingLocation.distributorMobile || '',
+      distributorMobile: normalizeAuMobile(editingLocation.distributorMobile || ''),
       distributorCustomerId: editingLocation.distributorCustomerId || '',
       transporterCustomerId: editingLocation.transporterCustomerId || '',
     });
     if (editingLocation.distributorCustomer) {
       const fullName = `${editingLocation.distributorCustomer.firstName} ${editingLocation.distributorCustomer.lastName}`.trim();
       const mobile = editingLocation.distributorCustomer.mobile
-        ? ` (${editingLocation.distributorCustomer.mobile})`
+        ? ` (${formatAuMobile(editingLocation.distributorCustomer.mobile)})`
         : '';
       setDistributorLabel(`${fullName}${mobile}`);
     } else if (editingLocation.distributorName || editingLocation.distributorMobile) {
       const mobile = editingLocation.distributorMobile
-        ? ` (${editingLocation.distributorMobile})`
+        ? ` (${formatAuMobile(editingLocation.distributorMobile)})`
         : '';
       setDistributorLabel(`${editingLocation.distributorName || 'Distributor'}${mobile}`);
     } else {
@@ -83,7 +84,7 @@ export default function LocationsPage() {
     if (editingLocation.transporterCustomer) {
       const fullName = `${editingLocation.transporterCustomer.firstName} ${editingLocation.transporterCustomer.lastName}`.trim();
       const mobile = editingLocation.transporterCustomer.mobile
-        ? ` (${editingLocation.transporterCustomer.mobile})`
+        ? ` (${formatAuMobile(editingLocation.transporterCustomer.mobile)})`
         : '';
       setTransporterLabel(`${fullName}${mobile}`);
     } else {
@@ -216,10 +217,10 @@ export default function LocationsPage() {
                           ...form,
                           distributorCustomerId: c.id,
                           distributorName: `${c.firstName} ${c.lastName}`.trim(),
-                          distributorMobile: c.mobile || '',
+                          distributorMobile: normalizeAuMobile(c.mobile || ''),
                         });
                         const fullName = `${c.firstName} ${c.lastName}`.trim();
-                        const mobile = c.mobile ? ` (${c.mobile})` : '';
+                        const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
                         setDistributorLabel(`${fullName}${mobile}`);
                         setDistributorSearch('');
                       }}
@@ -229,7 +230,9 @@ export default function LocationsPage() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </Button>
                   ))
@@ -267,7 +270,7 @@ export default function LocationsPage() {
                       onClick={() => {
                         setForm({ ...form, transporterCustomerId: c.id });
                         const fullName = `${c.firstName} ${c.lastName}`.trim();
-                        const mobile = c.mobile ? ` (${c.mobile})` : '';
+                        const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
                         setTransporterLabel(`${fullName}${mobile}`);
                         setTransporterSearch('');
                       }}
@@ -277,7 +280,9 @@ export default function LocationsPage() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </Button>
                   ))
@@ -338,14 +343,14 @@ export default function LocationsPage() {
                             {`${loc.distributorCustomer.firstName} ${loc.distributorCustomer.lastName}`.trim()}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {loc.distributorCustomer.mobile || '-'}
+                            {formatAuMobile(loc.distributorCustomer.mobile || '-') || '-'}
                           </div>
                         </>
                       ) : (
                         <>
                           <div className="text-sm font-medium">{loc.distributorName}</div>
                           <div className="text-xs text-muted-foreground">
-                            {loc.distributorMobile}
+                            {formatAuMobile(loc.distributorMobile || '') || '-'}
                           </div>
                         </>
                       )}
@@ -357,7 +362,7 @@ export default function LocationsPage() {
                             {`${loc.transporterCustomer.firstName} ${loc.transporterCustomer.lastName}`.trim()}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {loc.transporterCustomer.mobile || '-'}
+                            {formatAuMobile(loc.transporterCustomer.mobile || '-') || '-'}
                           </div>
                         </>
                       ) : (

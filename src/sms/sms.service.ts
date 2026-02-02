@@ -5,6 +5,8 @@ import { SendSmsDto } from './dto/send-sms.dto';
 import { ConfigService } from '@nestjs/config';
 import { SmsStatus } from '@prisma/client';
 import twilio from 'twilio';
+import { normalizeAuMobile, toE164AuMobile } from '../common/utils/phone';
+import { UpdateTemplateDto } from './dto/update-template.dto';
 
 @Injectable()
 export class SmsService {
@@ -28,22 +30,31 @@ export class SmsService {
     return this.prisma.smsTemplate.create({ data: dto });
   }
 
+  updateTemplate(id: string, dto: UpdateTemplateDto) {
+    return this.prisma.smsTemplate.update({
+      where: { id },
+      data: { body: dto.body },
+    });
+  }
+
   async send(dto: SendSmsDto) {
     const sender = process.env.TWILIO_SENDER_ID;
     const messages = await Promise.all(
       dto.to.map(async (to) => {
+        const normalizedTo = normalizeAuMobile(to) || to;
         await this.prisma.smsMessage.create({
           data: {
-            toMobile: to,
+            toMobile: normalizedTo,
             body: dto.body,
             campaignId: dto.campaignId,
             status: this.bypass ? SmsStatus.SENT : undefined,
           },
         });
         if (this.twilioClient) {
-          await this.twilioClient.messages.create({ from: sender, to, body: dto.body });
+          const toE164 = toE164AuMobile(normalizedTo);
+          await this.twilioClient.messages.create({ from: sender, to: toE164, body: dto.body });
         }
-        return to;
+        return normalizedTo;
       }),
     );
     return { sent: messages.length };

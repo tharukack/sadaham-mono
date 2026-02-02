@@ -1,0 +1,328 @@
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { AlertTriangle, Check, Clock, Dot, X } from 'lucide-react';
+import { formatAuMobile } from '../lib/phone';
+
+type CampaignLike = {
+  name?: string;
+  state?: string;
+  chickenCost?: number;
+  fishCost?: number;
+  vegCost?: number;
+  eggCost?: number;
+  otherCost?: number;
+};
+
+type OrderDetailsModalProps = {
+  order: any | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  campaignFallback?: CampaignLike | null;
+};
+
+export function OrderDetailsModal({
+  order,
+  open,
+  onOpenChange,
+  campaignFallback,
+}: OrderDetailsModalProps) {
+  if (!order) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent />
+      </Dialog>
+    );
+  }
+
+  const formatDateTime = (value?: string | Date | null) => {
+    if (!value) return '-';
+    return new Date(value).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const formatReadablePhone = (value?: string | null) => {
+    if (!value) return '-';
+    const normalized = formatAuMobile(value);
+    const digits = normalized.replace(/\D/g, '');
+    if (digits.length === 10 && digits.startsWith('0')) {
+      return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+    }
+    if (digits.length === 9) {
+      return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+    }
+    return normalized;
+  };
+
+  const getMealDetails = (orderValue: any) => {
+    const meals = [
+      { label: 'Chicken', qty: Number(orderValue.chickenQty || 0) },
+      { label: 'Fish', qty: Number(orderValue.fishQty || 0) },
+      { label: 'Veg', qty: Number(orderValue.vegQty || 0) },
+      { label: 'Egg', qty: Number(orderValue.eggQty || 0) },
+      { label: 'Other', qty: Number(orderValue.otherQty || 0) },
+    ];
+    const total = meals.reduce((sum, meal) => sum + meal.qty, 0);
+    return { total, meals: meals.filter((meal) => meal.qty > 0) };
+  };
+
+  const getOrderCost = (orderValue: any) => {
+    const campaign = orderValue.campaign || campaignFallback || {};
+    const chickenCost = campaign.chickenCost || 0;
+    const fishCost = campaign.fishCost || 0;
+    const vegCost = campaign.vegCost || 0;
+    const eggCost = campaign.eggCost || 0;
+    const otherCost = campaign.otherCost || 0;
+    return (
+      Number(orderValue.chickenQty || 0) * chickenCost +
+      Number(orderValue.fishQty || 0) * fishCost +
+      Number(orderValue.vegQty || 0) * vegCost +
+      Number(orderValue.eggQty || 0) * eggCost +
+      Number(orderValue.otherQty || 0) * otherCost
+    );
+  };
+
+  const mealDetails = getMealDetails(order);
+  const totalCost = getOrderCost(order);
+  const customerName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim();
+  const pickupByName = order.pickupByCustomer
+    ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
+    : customerName || '-';
+  const campaignName = order.campaign?.name || campaignFallback?.name || 'Current Campaign';
+  const campaignState = order.campaign?.state || campaignFallback?.state || '-';
+  const createdByName = order.createdBy
+    ? `${order.createdBy.firstName} ${order.createdBy.lastName}`.trim()
+    : '-';
+  const smsRows = [
+    { name: 'Order Confirmation', status: 'not_sent', timestamp: null },
+    { name: 'Order Reminder', status: 'not_sent', timestamp: null },
+    { name: 'Thank You', status: 'not_sent', timestamp: null },
+  ];
+  const smsStatus = 'Active';
+  const statusConfig: Record<string, { label: string; icon: JSX.Element; className: string }> = {
+    sent: {
+      label: 'Sent',
+      icon: <Check className="h-3.5 w-3.5" aria-hidden="true" />,
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    },
+    scheduled: {
+      label: 'Scheduled',
+      icon: <Clock className="h-3.5 w-3.5" aria-hidden="true" />,
+      className: 'border-amber-200 bg-amber-50 text-amber-700',
+    },
+    not_sent: {
+      label: 'Not Sent',
+      icon: <Dot className="h-3.5 w-3.5" aria-hidden="true" />,
+      className: 'border-slate-200 bg-slate-50 text-slate-700',
+    },
+    failed: {
+      label: 'Failed',
+      icon: <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />,
+      className: 'border-rose-200 bg-rose-50 text-rose-700',
+    },
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[1100px] max-h-[85vh] overflow-hidden p-0 [&>button]:hidden">
+        <div className="flex max-h-[85vh] flex-col">
+          <div className="sticky top-0 z-10 border-b bg-background">
+            <div className="flex items-center justify-between px-6 pt-5">
+              <DialogTitle className="text-lg">Order Details</DialogTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+            <div className="px-6 pb-4">
+              <Card className="shadow-sm">
+                <CardContent className="grid gap-3 p-4 md:grid-cols-[1.4fr_1fr]">
+                  <div>
+                    <div className="text-xs uppercase text-muted-foreground">Customer</div>
+                    <div className="text-lg font-semibold">{customerName || 'Customer'}</div>
+                  </div>
+                  <div className="grid gap-1 text-sm md:text-right">
+                    <div className="font-medium">
+                      {formatReadablePhone(
+                        (order.customer as any)?.phone || order.customer?.mobile || null
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {order.customer?.address || '-'}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="px-6 pb-4">
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Entered By</Badge>
+                  <span className="text-foreground">{createdByName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Entered On</Badge>
+                  <span className="text-foreground">{formatDateTime(order.createdAt)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Last Updated</Badge>
+                  <span className="text-foreground">{formatDateTime(order.updatedAt)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Status</Badge>
+                  <span className="text-foreground">{order.deletedAt ? 'Deleted' : 'Active'}</span>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 pb-4">
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-4 py-2 text-sm">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">
+                  Total Orders
+                </span>
+                <span className="font-medium">{mealDetails.total}</span>
+                {mealDetails.meals.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">No meals selected.</span>
+                ) : (
+                  mealDetails.meals.map((meal) => (
+                    <Badge key={meal.label} variant="secondary">
+                      {meal.label} {meal.qty}
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="shadow-sm">
+                <CardContent className="p-4 text-sm">
+                  <div className="mb-3 border-b pb-2 text-sm font-semibold uppercase text-muted-foreground">
+                    Order Summary
+                  </div>
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Campaign</span>
+                      <span className="text-right font-medium">{campaignName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Campaign State</span>
+                      <span className="text-right font-medium">{campaignState}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Total Cost</span>
+                      <span className="text-right font-semibold">${totalCost.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Order Entered User</span>
+                      <span className="text-right font-medium">{createdByName}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-sm">
+                <CardContent className="p-4 text-sm">
+                  <div className="mb-3 flex items-center justify-between border-b pb-2">
+                    <div className="text-sm font-semibold uppercase text-muted-foreground">
+                      SMS Campaign
+                    </div>
+                    <Badge variant="outline">{smsStatus}</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {smsRows.map((row) => {
+                      const config = statusConfig[row.status];
+                      const timestampLabel =
+                        row.status === 'scheduled'
+                          ? `Scheduled: ${formatDateTime(row.timestamp)}`
+                          : row.status === 'sent'
+                          ? `Sent: ${formatDateTime(row.timestamp)}`
+                          : row.status === 'failed'
+                          ? `Failed: ${formatDateTime(row.timestamp)}`
+                          : '-';
+                      return (
+                        <div
+                          key={row.name}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2"
+                        >
+                          <div className="min-w-[160px] font-medium">{row.name}</div>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${config.className}`}
+                          >
+                            {config.icon}
+                            {config.label}
+                          </span>
+                          <div className="text-xs text-muted-foreground">{timestampLabel}</div>
+                          {row.status === 'scheduled' ? (
+                            <Button size="sm" variant="secondary">
+                              Send now
+                            </Button>
+                          ) : row.status === 'failed' ? (
+                            <Button size="sm" variant="secondary">
+                              Retry
+                            </Button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-sm">
+                <CardContent className="p-4 text-sm">
+                  <div className="mb-3 border-b pb-2 text-sm font-semibold uppercase text-muted-foreground">
+                    Pickup Details
+                  </div>
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Pickup Location</span>
+                      <span className="text-right font-medium">
+                        {order.pickupLocation?.name || 'Unassigned'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Pickup By</span>
+                      <span className="text-right font-medium">{pickupByName || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Address</span>
+                      <span className="text-right font-medium">
+                        {order.pickupLocation?.address || '-'}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-sm">
+                <CardContent className="p-4 text-sm">
+                  <div className="mb-3 border-b pb-2 text-sm font-semibold uppercase text-muted-foreground">
+                    Notes
+                  </div>
+                  {order.note ? (
+                    <div className="whitespace-pre-wrap text-sm text-foreground">{order.note}</div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+                        <Dot className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      No notes added.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

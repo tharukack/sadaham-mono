@@ -33,7 +33,7 @@ pnpm run dev
 
 Default seeded admin for quick testing:
 
-- Mobile: `+61400000001`
+- Mobile: `0400000001`
 - Password: `1234`
 
 API docs and resources are organized by modules under `src/`, while the frontend lives in `web/` using Next.js and React Query.

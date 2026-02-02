@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { SmsService } from './sms.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { SendSmsDto } from './dto/send-sms.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { UpdateTemplateDto } from './dto/update-template.dto';
 
 @Controller('sms')
 @UseGuards(RolesGuard)
@@ -21,6 +22,12 @@ export class SmsController {
   @Roles(Role.ADMIN)
   createTemplate(@Body() dto: CreateTemplateDto) {
     return this.smsService.createTemplate(dto);
+  }
+
+  @Patch('templates/:id')
+  @Roles(Role.ADMIN)
+  updateTemplate(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
+    return this.smsService.updateTemplate(id, dto);
   }
 
   @Post('send')
