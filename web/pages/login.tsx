@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
+import { normalizeAuMobile } from '../lib/phone';
 
 export default function LoginPage() {
   const [mobile, setMobile] = useState('');
@@ -17,12 +18,14 @@ export default function LoginPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.post('/auth/login', { mobile, password });
+      const normalizedMobile = normalizeAuMobile(mobile);
+      setMobile(normalizedMobile);
+      const res = await api.post('/auth/login', { mobile: normalizedMobile, password });
       toast({
         title: 'OTP sent',
         description: `Expires at ${res.data.expiresAt}`,
       });
-      router.push({ pathname: '/otp', query: { mobile } });
+      router.push({ pathname: '/otp', query: { mobile: normalizedMobile } });
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -47,7 +50,7 @@ export default function LoginPage() {
                 id="mobile"
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
-                placeholder="+61400000000"
+                placeholder="0400000000"
               />
             </div>
             <div className="space-y-2">

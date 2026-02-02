@@ -35,11 +35,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useToast } from '../components/ui/use-toast';
 import { Pencil, Trash2, UserPlus } from 'lucide-react';
+import { OrderDetailsModal } from '../components/order-details-modal';
 import { KpiCards } from '../components/dashboard/kpi-cards';
 import { OrdersTrendChart } from '../components/dashboard/orders-trend-chart';
 import { MealTotalsChart } from '../components/dashboard/meal-totals-chart';
 import { PickupLocationsTable } from '../components/dashboard/pickup-locations-table';
 import { SmsSummary } from '../components/dashboard/sms-summary';
+import { formatAuMobile } from '../lib/phone';
 
 type Campaign = {
   id: string;
@@ -142,6 +144,7 @@ export default function Dashboard() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
   const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'updated' | 'name'>('updated');
+  const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [addOriginalForm, setAddOriginalForm] = useState({
     pickupLocationId: '',
     pickupByCustomerId: '',
@@ -363,6 +366,8 @@ export default function Dashboard() {
       Number(order.otherQty || 0) * otherCost
     );
   };
+
+
 
   useEffect(() => {
     if (!selectedCustomerId) {
@@ -619,7 +624,7 @@ export default function Dashboard() {
                   {(allCustomersQuery.data || []).map((c: any) => (
                     <CommandItem
                       key={c.id}
-                      value={`${c.firstName} ${c.lastName} ${c.mobile}`}
+                      value={`${c.firstName} ${c.lastName} ${formatAuMobile(c.mobile || '')}`}
                       onSelect={() => {
                         onChange(c.id);
                         onOpenChange(false);
@@ -629,7 +634,9 @@ export default function Dashboard() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </CommandItem>
                   ))}
@@ -677,7 +684,7 @@ export default function Dashboard() {
                   {(allCustomersQuery.data || []).map((c: any) => (
                     <CommandItem
                       key={c.id}
-                      value={`${c.firstName} ${c.lastName} ${c.mobile}`}
+                      value={`${c.firstName} ${c.lastName} ${formatAuMobile(c.mobile || '')}`}
                       onSelect={() => {
                         onChange(c.id);
                         setPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
@@ -689,7 +696,9 @@ export default function Dashboard() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </CommandItem>
                   ))}
@@ -820,7 +829,13 @@ export default function Dashboard() {
                         return (
                           <TableRow key={order.id} className="whitespace-nowrap">
                             <TableCell className="sticky left-0 z-10 bg-background font-medium">
-                              {order.customer?.firstName} {order.customer?.lastName}
+                              <button
+                                type="button"
+                                className="text-left text-foreground underline-offset-4 hover:underline"
+                                onClick={() => setDetailOrder(order)}
+                              >
+                                {order.customer?.firstName} {order.customer?.lastName}
+                              </button>
                             </TableCell>
                             <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
                             <TableCell>
@@ -1432,6 +1447,14 @@ export default function Dashboard() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <OrderDetailsModal
+        order={detailOrder}
+        open={!!detailOrder}
+        onOpenChange={(open) => (!open ? setDetailOrder(null) : null)}
+        campaignFallback={selectedCampaign}
+      />
     </AppShell>
   );
 }
+

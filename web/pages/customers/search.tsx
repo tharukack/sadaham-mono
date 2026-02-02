@@ -19,6 +19,7 @@ import { Badge } from '../../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../components/ui/use-toast';
 import { Pencil, Trash2 } from 'lucide-react';
+import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
 
 export default function CustomerSearchPage() {
   const queryClient = useQueryClient();
@@ -100,7 +101,7 @@ export default function CustomerSearchPage() {
     setForm({
       firstName: editingCustomer.firstName || '',
       lastName: editingCustomer.lastName || '',
-      mobile: editingCustomer.mobile || '',
+      mobile: normalizeAuMobile(editingCustomer.mobile || ''),
       address: editingCustomer.address || '',
     });
   }, [editingCustomer]);
@@ -248,7 +249,7 @@ export default function CustomerSearchPage() {
                         <TableCell className="font-medium">
                           {c.firstName} {c.lastName}
                         </TableCell>
-                        <TableCell>{c.mobile}</TableCell>
+                        <TableCell>{formatAuMobile(c.mobile || '')}</TableCell>
                         <TableCell>{c.address || '-'}</TableCell>
                         <TableCell>
                           {c.updatedAt
@@ -418,7 +419,7 @@ export default function CustomerSearchPage() {
                   id="customer-mobile"
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-                  placeholder="+61400000000"
+                  placeholder="0400000000"
                   required
                 />
               </div>

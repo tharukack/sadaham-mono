@@ -12,6 +12,7 @@ import { Label } from '../../components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Textarea } from '../../components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
+import { OrderDetailsModal } from '../../components/order-details-modal';
 import {
   Select,
   SelectContent,
@@ -50,6 +51,7 @@ export default function OrdersPage() {
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
   const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'updated' | 'name'>('updated');
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     chickenQty: 0,
@@ -289,7 +291,13 @@ export default function OrdersPage() {
                     return (
                       <TableRow key={order.id}>
                         <TableCell className="sticky left-0 z-10 bg-background font-medium">
-                          {order.customer?.firstName} {order.customer?.lastName}
+                          <button
+                            type="button"
+                            className="text-left text-foreground underline-offset-4 hover:underline"
+                            onClick={() => setDetailOrder(order)}
+                          >
+                            {order.customer?.firstName} {order.customer?.lastName}
+                          </button>
                         </TableCell>
                         <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
                         <TableCell>
@@ -578,6 +586,12 @@ export default function OrdersPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <OrderDetailsModal
+        order={detailOrder}
+        open={!!detailOrder}
+        onOpenChange={(open) => (!open ? setDetailOrder(null) : null)}
+        campaignFallback={currentCampaignQuery.data}
+      />
     </AppShell>
   );
 }

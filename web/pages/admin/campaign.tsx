@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../lib/api';
+import { formatAuMobile } from '../../lib/phone';
 import { AppShell } from '../../components/layout/app-shell';
 import { PageHeader } from '../../components/page-header';
 import { Badge } from '../../components/ui/badge';
@@ -1031,7 +1032,9 @@ export default function CampaignPage() {
                                   <TableCell>{expandedOrdersStart + index + 1}</TableCell>
                                   <TableCell>{order.customer?.firstName || 'Unknown'}</TableCell>
                                   <TableCell>{order.customer?.lastName || 'Unknown'}</TableCell>
-                                  <TableCell>{order.customer?.mobile || 'Unknown'}</TableCell>
+                                  <TableCell>
+                                    {formatAuMobile(order.customer?.mobile || '') || 'Unknown'}
+                                  </TableCell>
                                   <TableCell>{createdBy}</TableCell>
                                   <TableCell>{updatedBy}</TableCell>
                                   <TableCell>
@@ -1370,7 +1373,9 @@ export default function CampaignPage() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </Button>
                   ))
@@ -1417,7 +1422,9 @@ export default function CampaignPage() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </Button>
                   ))
@@ -1614,7 +1621,9 @@ export default function CampaignPage() {
                         <div className="text-sm font-medium">
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.mobile}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
                       </div>
                     </Button>
                   ))

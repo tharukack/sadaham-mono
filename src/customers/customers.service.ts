@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/utils/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { normalizeAuMobile } from '../common/utils/phone';
 
 @Injectable()
 export class CustomersService {
@@ -15,6 +16,7 @@ export class CustomersService {
   }
 
   search(term: string) {
+    const normalizedTerm = normalizeAuMobile(term || '');
     return this.prisma.customer.findMany({
       where: {
         deletedAt: null,
@@ -22,6 +24,9 @@ export class CustomersService {
           { firstName: { contains: term, mode: 'insensitive' } },
           { lastName: { contains: term, mode: 'insensitive' } },
           { mobile: { contains: term } },
+          ...(normalizedTerm && normalizedTerm !== term
+            ? [{ mobile: { contains: normalizedTerm } }]
+            : []),
         ],
       },
       include: { createdBy: true },

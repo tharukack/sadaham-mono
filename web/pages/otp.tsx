@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
+import { normalizeAuMobile } from '../lib/phone';
 
 export default function OtpPage() {
   const [mobile, setMobile] = useState('');
@@ -17,14 +18,16 @@ export default function OtpPage() {
 
   useEffect(() => {
     if (router.query.mobile && typeof router.query.mobile === 'string') {
-      setMobile(router.query.mobile);
+      setMobile(normalizeAuMobile(router.query.mobile));
     }
   }, [router.query.mobile]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.post('/auth/verify', { mobile, code });
+      const normalizedMobile = normalizeAuMobile(mobile);
+      setMobile(normalizedMobile);
+      const res = await api.post('/auth/verify', { mobile: normalizedMobile, code });
       const { token: jwt, redirect, sessionId: newSessionId, user } = res.data;
       setToken(jwt);
       if (jwt) {
@@ -66,7 +69,7 @@ export default function OtpPage() {
                 id="otp-mobile"
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
-                placeholder="+61400000000"
+                placeholder="0400000000"
               />
             </div>
             <div className="space-y-2">

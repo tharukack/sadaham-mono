@@ -42,7 +42,7 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
     // Bypass OTP for specific test account
-    const bypassMobile = '+61400000001';
+    const bypassMobile = '0400000001';
     const bypassCode = '123456';
 
     if (dto.mobile === bypassMobile && dto.code === bypassCode) {

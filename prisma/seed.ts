@@ -80,15 +80,94 @@ function mulberry32(seed: number) {
 const rand = mulberry32(20260128);
 const pick = (items: string[]) => items[Math.floor(rand() * items.length)];
 
+function toLocalMobile(input: string) {
+  if (!input) return input;
+  const digits = input.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('61')) {
+    const rest = digits.slice(2);
+    if (rest.startsWith('0')) return rest;
+    if (rest.length === 9) return `0${rest}`;
+    return rest;
+  }
+  if (digits.length === 9 && digits.startsWith('4')) {
+    return `0${digits}`;
+  }
+  return digits;
+}
+
+async function normalizeExistingMobiles() {
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [{ mobile: { startsWith: '+61' } }, { mobile: { startsWith: '61' } }],
+    },
+  });
+  for (const user of users) {
+    const local = toLocalMobile(user.mobile);
+    if (local && local !== user.mobile) {
+      const existing = await prisma.user.findUnique({ where: { mobile: local } });
+      if (!existing) {
+        await prisma.user.update({ where: { id: user.id }, data: { mobile: local } });
+      }
+    }
+  }
+
+  const customers = await prisma.customer.findMany({
+    where: {
+      OR: [{ mobile: { startsWith: '+61' } }, { mobile: { startsWith: '61' } }],
+    },
+  });
+  for (const customer of customers) {
+    const local = toLocalMobile(customer.mobile);
+    if (local && local !== customer.mobile) {
+      const existing = await prisma.customer.findUnique({ where: { mobile: local } });
+      if (!existing) {
+        await prisma.customer.update({ where: { id: customer.id }, data: { mobile: local } });
+      }
+    }
+  }
+
+  const locations = await prisma.pickupLocation.findMany({
+    where: {
+      OR: [
+        { distributorMobile: { startsWith: '+61' } },
+        { distributorMobile: { startsWith: '61' } },
+      ],
+    },
+  });
+  for (const location of locations) {
+    const local = toLocalMobile(location.distributorMobile);
+    if (local && local !== location.distributorMobile) {
+      await prisma.pickupLocation.update({
+        where: { id: location.id },
+        data: { distributorMobile: local },
+      });
+    }
+  }
+
+  const messages = await prisma.smsMessage.findMany({
+    where: {
+      OR: [{ toMobile: { startsWith: '+61' } }, { toMobile: { startsWith: '61' } }],
+    },
+  });
+  for (const message of messages) {
+    const local = toLocalMobile(message.toMobile);
+    if (local && local !== message.toMobile) {
+      await prisma.smsMessage.update({ where: { id: message.id }, data: { toMobile: local } });
+    }
+  }
+}
+
 async function main() {
+  await normalizeExistingMobiles();
   const passwordHash = await bcrypt.hash('1234', 10);
 
   const [admin, editor1, editor2, viewer] = await Promise.all([
     prisma.user.upsert({
-      where: { mobile: '+61400000001' },
+      where: { mobile: '0400000001' },
       update: {},
       create: {
-        mobile: '+61400000001',
+        mobile: '0400000001',
         email: 'admin@example.com',
         firstName: 'Admin',
         lastName: 'User',
@@ -97,10 +176,10 @@ async function main() {
       },
     }),
     prisma.user.upsert({
-      where: { mobile: '+61400000002' },
+      where: { mobile: '0400000002' },
       update: {},
       create: {
-        mobile: '+61400000002',
+        mobile: '0400000002',
         email: 'editor1@example.com',
         firstName: 'Ed',
         lastName: 'One',
@@ -109,10 +188,10 @@ async function main() {
       },
     }),
     prisma.user.upsert({
-      where: { mobile: '+61400000003' },
+      where: { mobile: '0400000003' },
       update: {},
       create: {
-        mobile: '+61400000003',
+        mobile: '0400000003',
         email: 'editor2@example.com',
         firstName: 'Ed',
         lastName: 'Two',
@@ -121,10 +200,10 @@ async function main() {
       },
     }),
     prisma.user.upsert({
-      where: { mobile: '+61400000004' },
+      where: { mobile: '0400000004' },
       update: {},
       create: {
-        mobile: '+61400000004',
+        mobile: '0400000004',
         email: 'viewer@example.com',
         firstName: 'View',
         lastName: 'Only',
@@ -150,7 +229,7 @@ async function main() {
           name: `Community Hub ${index + 1}`,
           address: `${index + 1} Main Street`,
           distributorName: `Distributor ${index + 1}`,
-          distributorMobile: `+6140000001${index}`,
+          distributorMobile: `040000001${index}`,
         },
       }),
     ),
@@ -164,10 +243,10 @@ async function main() {
       const street = pick(nameSeeds.streets);
       const suburb = pick(nameSeeds.suburbs);
       return prisma.customer.upsert({
-        where: { mobile: `+61420000${String(index).padStart(3, '0')}` },
+        where: { mobile: `0420000${String(index).padStart(3, '0')}` },
         update: {},
         create: {
-          mobile: `+61420000${String(index).padStart(3, '0')}`,
+          mobile: `0420000${String(index).padStart(3, '0')}`,
           firstName,
           lastName,
           address: `${streetNo} ${street}, ${suburb}`,
@@ -205,9 +284,20 @@ async function main() {
     create: { name: 'Order Confirmation', body: 'Hi {{firstName}}, your order is confirmed.' },
   });
   await prisma.smsTemplate.upsert({
-    where: { name: 'Campaign Blast' },
+    where: { name: 'Order Reminder' },
     update: {},
-    create: { name: 'Campaign Blast', body: 'Hello! Check out our latest campaign offers.' },
+    create: {
+      name: 'Order Reminder',
+      body: 'Hi {{firstName}}, just a reminder about your order pickup.',
+    },
+  });
+  await prisma.smsTemplate.upsert({
+    where: { name: 'Thank You Note' },
+    update: {},
+    create: {
+      name: 'Thank You Note',
+      body: 'Hi {{firstName}}, thank you for your order!',
+    },
   });
 
   await prisma.smsMessage.create({

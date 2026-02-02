@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../components/ui/use-toast';
 import { Pencil } from 'lucide-react';
+import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
@@ -100,7 +101,7 @@ export default function UsersPage() {
     setForm({
       firstName: editingUser.firstName || "",
       lastName: editingUser.lastName || "",
-      mobile: editingUser.mobile || "",
+      mobile: normalizeAuMobile(editingUser.mobile || ""),
       email: editingUser.email || "",
       address: editingUser.address || "",
       role: editingUser.role || "VIEWER",
@@ -238,7 +239,7 @@ export default function UsersPage() {
                         <TableCell className="font-medium">
                           {user.firstName} {user.lastName}
                         </TableCell>
-                        <TableCell>{user.mobile}</TableCell>
+                        <TableCell>{formatAuMobile(user.mobile || '')}</TableCell>
                         <TableCell>{user.email || '-'}</TableCell>
                         <TableCell>
                           {user.role === 'ADMIN' ? (
@@ -408,7 +409,7 @@ export default function UsersPage() {
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                   disabled={!isAdmin}
-                  placeholder="+61400000000"
+                  placeholder="0400000000"
                   required
                 />
               </div>
