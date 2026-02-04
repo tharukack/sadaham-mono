@@ -22,6 +22,12 @@ export class OrdersController {
     return this.ordersService.list(user);
   }
 
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.EDITOR, Role.VIEWER)
+  getById(@Param('id') id: string) {
+    return this.ordersService.getById(id);
+  }
+
   @Post()
   @Roles(Role.ADMIN, Role.EDITOR)
   create(@Body() dto: CreateOrderDto, @Req() req: Request) {

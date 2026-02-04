@@ -24,11 +24,25 @@ export class CampaignsService {
     if (!campaign) {
       throw new BadRequestException('Campaign not found.');
     }
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { campaignId: id },
       include: { customer: true, pickupByCustomer: true, pickupLocation: true, createdBy: true, updatedBy: true },
       orderBy: { createdAt: 'desc' },
     });
+    if (!orders.length) return orders;
+    const smsMessages = await this.prisma.smsMessage.findMany({
+      where: { orderId: { in: orders.map((order) => order.id) } },
+    });
+    const smsByOrder = smsMessages.reduce<Record<string, any[]>>((acc, message) => {
+      if (!message.orderId) return acc;
+      acc[message.orderId] = acc[message.orderId] || [];
+      acc[message.orderId].push(message);
+      return acc;
+    }, {});
+    return orders.map((order) => ({
+      ...order,
+      smsMessages: smsByOrder[order.id] || [],
+    }));
   }
 
   lastEnded() {

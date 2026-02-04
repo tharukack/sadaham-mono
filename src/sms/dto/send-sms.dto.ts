@@ -15,4 +15,12 @@ export class SendSmsDto {
   @IsOptional()
   @IsString()
   campaignId?: string;
+
+  @IsOptional()
+  @IsString()
+  orderId?: string;
+
+  @IsOptional()
+  @IsString()
+  customerId?: string;
 }

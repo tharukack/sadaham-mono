@@ -3,14 +3,60 @@ import { PrismaService } from '../common/utils/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CampaignState, Role, User } from '@prisma/client';
+import { SmsService } from '../sms/sms.service';
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private smsService: SmsService) {}
+
+  private interpolateTemplate(body: string, order: any) {
+    const mealCounts = {
+      chicken: Number(order.chickenQty || 0),
+      fish: Number(order.fishQty || 0),
+      veg: Number(order.vegQty || 0),
+      egg: Number(order.eggQty || 0),
+      other: Number(order.otherQty || 0),
+    };
+    const totalOrders =
+      mealCounts.chicken + mealCounts.fish + mealCounts.veg + mealCounts.egg + mealCounts.other;
+    const replacements: Record<string, string> = {
+      '{{firstName}}': order.customer?.firstName || '',
+      '{{lastName}}': order.customer?.lastName || '',
+      '{{pickupLocation}}': order.pickupLocation?.name || '',
+      '{{pickupAddress}}': order.pickupLocation?.address || '',
+      '{{campaignName}}': order.campaign?.name || '',
+      '{{nooforders}}': String(totalOrders),
+      '{{numberofchicken}}': String(mealCounts.chicken),
+      '{{numberoffish}}': String(mealCounts.fish),
+      '{{numberofveg}}': String(mealCounts.veg),
+      '{{numberofegg}}': String(mealCounts.egg),
+      '{{numberofothers}}': String(mealCounts.other),
+    };
+    let result = body;
+    Object.entries(replacements).forEach(([token, value]) => {
+      result = result.split(token).join(value);
+    });
+    return result;
+  }
+
+  private async sendOrderConfirmation(order: any) {
+    const mobile = order?.customer?.mobile;
+    if (!mobile) return;
+    const template = await this.smsService.getTemplateByName('Order Confirmation');
+    if (!template?.body) return;
+    const body = this.interpolateTemplate(template.body, order);
+    await this.smsService.send({
+      body,
+      to: [mobile],
+      campaignId: order.campaignId,
+      orderId: order.id,
+      customerId: order.customerId,
+    });
+  }
 
   async list(user: User) {
     if (user.role === Role.ADMIN) {
-      return this.prisma.order.findMany({
+      const orders = await this.prisma.order.findMany({
         include: {
           customer: true,
           pickupByCustomer: true,
@@ -21,6 +67,7 @@ export class OrdersService {
         },
         orderBy: { createdAt: 'desc' },
       });
+      return this.attachSmsMessages(orders);
     }
 
     const current = await this.prisma.campaign.findFirst({
@@ -30,7 +77,7 @@ export class OrdersService {
     if (!current) {
       return [];
     }
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { campaignId: current.id },
       include: {
         customer: true,
@@ -42,6 +89,41 @@ export class OrdersService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return this.attachSmsMessages(orders);
+  }
+
+  async getById(id: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        pickupByCustomer: true,
+        campaign: true,
+        pickupLocation: true,
+        createdBy: true,
+        updatedBy: true,
+      },
+    });
+    if (!order) return null;
+    const [withSms] = await this.attachSmsMessages([order]);
+    return withSms;
+  }
+
+  private async attachSmsMessages(orders: any[]) {
+    if (!orders.length) return orders;
+    const smsMessages = await this.prisma.smsMessage.findMany({
+      where: { orderId: { in: orders.map((order) => order.id) } },
+    });
+    const smsByOrder = smsMessages.reduce<Record<string, any[]>>((acc, message) => {
+      if (!message.orderId) return acc;
+      acc[message.orderId] = acc[message.orderId] || [];
+      acc[message.orderId].push(message);
+      return acc;
+    }, {});
+    return orders.map((order) => ({
+      ...order,
+      smsMessages: smsByOrder[order.id] || [],
+    }));
   }
 
   async create(dto: CreateOrderDto, user: User) {
@@ -74,7 +156,7 @@ export class OrdersService {
     });
     if (existing) {
       if (existing.deletedAt) {
-        return this.prisma.order.update({
+        const restored = await this.prisma.order.update({
           where: { id: existing.id },
           data: {
             pickupLocationId: dto.pickupLocationId,
@@ -97,11 +179,13 @@ export class OrdersService {
             updatedBy: true,
           },
         });
+        await this.sendOrderConfirmation(restored);
+        return restored;
       }
       return existing;
     }
 
-    return this.prisma.order.create({
+    const created = await this.prisma.order.create({
       data: {
         campaignId: current.id,
         customerId: dto.customerId,
@@ -125,6 +209,8 @@ export class OrdersService {
         updatedBy: true,
       },
     });
+    await this.sendOrderConfirmation(created);
+    return created;
   }
 
   async update(id: string, dto: UpdateOrderDto, user: User) {
@@ -153,7 +239,7 @@ export class OrdersService {
       throw new ForbiddenException('Only admins can edit orders in frozen campaigns.');
     }
 
-    return this.prisma.order.update({
+    const updated = await this.prisma.order.update({
       where: { id },
       data: {
         ...dto,
@@ -170,6 +256,8 @@ export class OrdersService {
         updatedBy: true,
       },
     });
+    await this.sendOrderConfirmation(updated);
+    return updated;
   }
 
   async softDelete(id: string, user: User) {

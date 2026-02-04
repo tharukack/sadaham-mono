@@ -8,5 +8,6 @@ import { ConfigModule } from '@nestjs/config';
   imports: [PrismaModule, ConfigModule],
   controllers: [SmsController],
   providers: [SmsService],
+  exports: [SmsService],
 })
 export class SmsModule {}

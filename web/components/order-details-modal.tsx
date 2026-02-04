@@ -2,8 +2,10 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
-import { AlertTriangle, Check, Clock, Dot, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Dot, RotateCcw, X } from 'lucide-react';
 import { formatAuMobile } from '../lib/phone';
+import { api } from '../lib/api';
+import { useEffect, useState } from 'react';
 
 type CampaignLike = {
   name?: string;
@@ -99,11 +101,71 @@ export function OrderDetailsModal({
   const createdByName = order.createdBy
     ? `${order.createdBy.firstName} ${order.createdBy.lastName}`.trim()
     : '-';
+  const [smsLocal, setSmsLocal] = useState<any[]>([]);
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setSmsLocal(Array.isArray(order.smsMessages) ? order.smsMessages : []);
+  }, [order]);
+
+  useEffect(() => {
+    if (!open || !order?.id) return;
+    let isActive = true;
+    const load = async () => {
+      try {
+        const res = await api.get(`/orders/${order.id}`);
+        if (!isActive) return;
+        setSmsLocal(Array.isArray(res.data?.smsMessages) ? res.data.smsMessages : []);
+      } catch {
+        if (!isActive) return;
+      }
+    };
+    load();
+    return () => {
+      isActive = false;
+    };
+  }, [open, order?.id]);
+
+  const latestConfirmation = smsLocal
+    .slice()
+    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
+  const confirmationStatus =
+    latestConfirmation?.status === 'FAILED'
+      ? 'failed'
+      : latestConfirmation?.status === 'QUEUED'
+      ? 'scheduled'
+      : latestConfirmation?.status
+      ? 'sent'
+      : 'not_sent';
+  const confirmationTimestamp = latestConfirmation?.createdAt || null;
+  const confirmationId = latestConfirmation?.id || null;
+
   const smsRows = [
-    { name: 'Order Confirmation', status: 'not_sent', timestamp: null },
+    {
+      name: 'Order Confirmation',
+      status: confirmationStatus,
+      timestamp: confirmationTimestamp,
+      messageId: confirmationId,
+    },
     { name: 'Order Reminder', status: 'not_sent', timestamp: null },
     { name: 'Thank You', status: 'not_sent', timestamp: null },
   ];
+
+  const retrySms = async (messageId: string) => {
+    if (!messageId) return;
+    setRetryingIds((prev) => new Set([...prev, messageId]));
+    setSmsLocal((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId ? { ...msg, status: 'QUEUED', updatedAt: new Date().toISOString() } : msg
+      )
+    );
+    await api.post(`/sms/retry/${messageId}`);
+    setRetryingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(messageId);
+      return next;
+    });
+  };
   const smsStatus = 'Active';
   const statusConfig: Record<string, { label: string; icon: JSX.Element; className: string }> = {
     sent: {
@@ -112,7 +174,7 @@ export function OrderDetailsModal({
       className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     },
     scheduled: {
-      label: 'Scheduled',
+      label: 'Queued',
       icon: <Clock className="h-3.5 w-3.5" aria-hidden="true" />,
       className: 'border-amber-200 bg-amber-50 text-amber-700',
     },
@@ -238,42 +300,43 @@ export function OrderDetailsModal({
                     </div>
                     <Badge variant="outline">{smsStatus}</Badge>
                   </div>
-                  <div className="space-y-3">
-                    {smsRows.map((row) => {
-                      const config = statusConfig[row.status];
-                      const timestampLabel =
-                        row.status === 'scheduled'
-                          ? `Scheduled: ${formatDateTime(row.timestamp)}`
-                          : row.status === 'sent'
-                          ? `Sent: ${formatDateTime(row.timestamp)}`
-                          : row.status === 'failed'
-                          ? `Failed: ${formatDateTime(row.timestamp)}`
-                          : '-';
-                      return (
-                        <div
-                          key={row.name}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2"
-                        >
-                          <div className="min-w-[160px] font-medium">{row.name}</div>
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${config.className}`}
-                          >
-                            {config.icon}
-                            {config.label}
-                          </span>
-                          <div className="text-xs text-muted-foreground">{timestampLabel}</div>
-                          {row.status === 'scheduled' ? (
-                            <Button size="sm" variant="secondary">
-                              Send now
-                            </Button>
-                          ) : row.status === 'failed' ? (
-                            <Button size="sm" variant="secondary">
-                              Retry
-                            </Button>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                        <div className="space-y-3">
+                          {smsRows.map((row: any) => {
+                            const config = statusConfig[row.status];
+                            const timestampLabel = row.timestamp
+                              ? formatDateTime(row.timestamp)
+                              : '-';
+                            return (
+                              <div
+                                key={row.name}
+                                className="grid items-center gap-2 rounded-md border px-3 py-2 md:grid-cols-[1.2fr_1fr_auto]"
+                              >
+                                <div className="min-w-[160px] font-medium">{row.name}</div>
+                                <div className="text-xs text-muted-foreground md:text-center">
+                                  {timestampLabel}
+                                </div>
+                                <div className="flex items-center gap-2 justify-self-start md:justify-self-end">
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${config.className}`}
+                                  >
+                                    {config.icon}
+                                    {config.label}
+                                  </span>
+                                  {row.status === 'failed' ? (
+                                    <Button
+                                      size="icon"
+                                      variant="secondary"
+                                      onClick={() => retrySms(row.messageId)}
+                                      disabled={retryingIds.has(row.messageId)}
+                                      aria-label="Retry SMS"
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
                   </div>
                 </CardContent>
               </Card>

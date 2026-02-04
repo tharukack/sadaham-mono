@@ -75,7 +75,19 @@ export default function SmsPage() {
 
   const isAdmin = currentRole === 'ADMIN';
 
-  const placeholderTokens = ['{{firstName}}', '{{lastName}}', '{{pickupLocation}}', '{{pickupDate}}'];
+  const placeholderTokens = [
+    '{{firstName}}',
+    '{{lastName}}',
+    '{{pickupLocation}}',
+    '{{pickupAddress}}',
+    '{{campaignName}}',
+    '{{nooforders}}',
+    '{{numberofchicken}}',
+    '{{numberoffish}}',
+    '{{numberofveg}}',
+    '{{numberofegg}}',
+    '{{numberofothers}}',
+  ];
 
   const openEditor = (name: string) => {
     const body = form[name] || '';
