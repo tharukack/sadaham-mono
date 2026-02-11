@@ -12,6 +12,7 @@ import { AuditModule } from './audit/audit.module';
 import { PrismaModule } from './common/utils/prisma.module';
 import { RootController } from './root.controller';
 import { AuthMiddleware } from './common/middleware/auth.middleware';
+import { StatsModule } from './stats/stats.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AuthMiddleware } from './common/middleware/auth.middleware';
     OrdersModule,
     SmsModule,
     AuditModule,
+    StatsModule,
   ],
   controllers: [RootController],
   providers: [AuthMiddleware],

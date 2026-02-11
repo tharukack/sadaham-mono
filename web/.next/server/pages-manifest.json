@@ -2,8 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/admin/sms": "pages/admin/sms.js",
-  "/otp": "pages/otp.js",
-  "/dashboard": "pages/dashboard.js",
-  "/customers/search": "pages/customers/search.js"
+  "/admin/locations": "pages/admin/locations.js",
+  "/orders": "pages/orders.js",
+  "/dispatch": "pages/dispatch.js",
+  "/dashboard": "pages/dashboard.js"
 }

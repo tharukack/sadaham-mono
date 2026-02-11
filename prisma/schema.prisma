@@ -41,6 +41,9 @@ model User {
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  mainCollectorId String?
+  mainCollector   User?         @relation("UserMainCollector", fields: [mainCollectorId], references: [id])
+  collectorUsers  User[]        @relation("UserMainCollector")
   sessions       UserSession[]
   otpCodes       OtpCode[]
   createdCustomers Customer[]   @relation("CustomerCreatedBy")
@@ -107,6 +110,9 @@ model PickupLocation {
   address           String
   distributorName   String
   distributorMobile String
+  deliveryTimeMinutes Int?
+  distributionPriority Int?
+  timeOfDispatch     String?
   distributorCustomerId String?
   distributorCustomer Customer? @relation("PickupLocationDistributor", fields: [distributorCustomerId], references: [id])
   transporterCustomerId String?

@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsEnum, IsMobilePhone, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsMobilePhone, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Role } from '@prisma/client';
 import { normalizeAuMobile } from '../../common/utils/phone';
@@ -32,4 +32,8 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  mainCollectorId?: string;
 }

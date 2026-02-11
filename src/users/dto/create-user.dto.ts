@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsMobilePhone, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsMobilePhone, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Role } from '@prisma/client';
 import { normalizeAuMobile } from '../../common/utils/phone';
@@ -27,4 +27,8 @@ export class CreateUserDto {
 
   @MinLength(6)
   password!: string;
+
+  @IsOptional()
+  @IsUUID()
+  mainCollectorId?: string;
 }

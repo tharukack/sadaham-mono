@@ -146,6 +146,13 @@ export default function OrdersPage() {
   }, [orders]);
 
   const totalOrdersCount = orders.length;
+  const activeOrders = useMemo(() => orders.filter((order: any) => !order.deletedAt), [orders]);
+  const activeOrderCount = activeOrders.length;
+  const activeOrderAmount = useMemo(() => {
+    return activeOrders.reduce((sum, order) => sum + getOrderCost(order), 0);
+  }, [activeOrders]);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat(undefined, { style: 'currency', currency: 'AUD' }).format(value);
 
   const isAdmin = currentRole === 'ADMIN';
   const isEditor = currentRole === 'EDITOR';
@@ -234,9 +241,24 @@ export default function OrdersPage() {
             <div className="flex flex-wrap items-center gap-3">
               <CardTitle>Order List</CardTitle>
               {currentCampaignQuery.data && (
-                <span className="text-sm font-medium text-muted-foreground">
-                  Total Orders: {totalOrdersCount} · Total Cost: {totalOrderAmount.toFixed(2)}
-                </span>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span className="rounded-full border px-3 py-1">
+                    <span className="font-medium text-foreground">All Orders</span>{' '}
+                    <span className="text-foreground">{totalOrdersCount}</span>
+                  </span>
+                  <span className="rounded-full border px-3 py-1">
+                    <span className="font-medium text-foreground">All Cost</span>{' '}
+                    <span className="text-foreground">{formatCurrency(totalOrderAmount)}</span>
+                  </span>
+                  <span className="rounded-full border px-3 py-1">
+                    <span className="font-medium text-foreground">Active Orders</span>{' '}
+                    <span className="text-foreground">{activeOrderCount}</span>
+                  </span>
+                  <span className="rounded-full border px-3 py-1">
+                    <span className="font-medium text-foreground">Active Cost</span>{' '}
+                    <span className="text-foreground">{formatCurrency(activeOrderAmount)}</span>
+                  </span>
+                </div>
               )}
             </div>
             <Button asChild disabled={!canCreateOrders}>

@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import {
   ClipboardList,
+  BarChart3,
   LayoutDashboard,
   MapPin,
   MessageSquare,
   ShieldCheck,
   ShoppingBag,
+  Truck,
   Users,
 } from 'lucide-react';
 
@@ -22,6 +24,7 @@ const navSections = [
     title: 'Operations',
     items: [
       { href: '/orders', label: 'Orders', icon: ShoppingBag },
+      { href: '/dispatch', label: 'Dispatch', icon: Truck },
       { href: '/customers/search', label: 'Customers', icon: Users },
     ],
   },
@@ -30,6 +33,7 @@ const navSections = [
     items: [
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/campaign', label: 'Campaigns', icon: ClipboardList },
+      { href: '/stats', label: 'Stats', icon: BarChart3 },
       { href: '/admin/locations', label: 'Pickup Locations', icon: MapPin },
       { href: '/admin/sms', label: 'SMS Templates', icon: MessageSquare },
       { href: '/admin/audit', label: 'Audit Log', icon: ShieldCheck },

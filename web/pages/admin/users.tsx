@@ -43,7 +43,9 @@ export default function UsersPage() {
     role: 'VIEWER',
     password: '',
     isActive: true,
+    mainCollectorId: '',
   });
+  const [collectorSearch, setCollectorSearch] = useState('');
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -58,6 +60,13 @@ export default function UsersPage() {
   }, []);
 
   const users = useMemo(() => (data || []) as any[], [data]);
+  const usersById = useMemo(() => {
+    const map = new Map<string, any>();
+    users.forEach((user) => {
+      if (user?.id) map.set(user.id, user);
+    });
+    return map;
+  }, [users]);
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return users;
@@ -95,6 +104,34 @@ export default function UsersPage() {
     () => users.find((u) => u.id === editingUserId),
     [users, editingUserId]
   );
+  const formatUserLabel = (user: any) => {
+    const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    return name || 'Unnamed user';
+  };
+  const selectedCollector = useMemo(() => {
+    if (!form.mainCollectorId) return null;
+    return users.find((u) => u.id === form.mainCollectorId) || null;
+  }, [form.mainCollectorId, users]);
+  const selectedCollectorLabel = useMemo(() => {
+    return selectedCollector ? formatUserLabel(selectedCollector) : '';
+  }, [selectedCollector]);
+  const getCollectorLabel = (user: any) => {
+    if (!user?.mainCollectorId || user.mainCollectorId === user.id) {
+      return 'Self';
+    }
+    const collector = usersById.get(user.mainCollectorId);
+    return collector ? formatUserLabel(collector) : 'Unknown';
+  };
+  const collectorOptions = useMemo(() => {
+    const term = collectorSearch.trim().toLowerCase();
+    if (!term) return [];
+    return users
+      .filter((user) => {
+        const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        return fullName.toLowerCase().includes(term);
+      })
+      .slice(0, 8);
+  }, [users, collectorSearch]);
 
   useEffect(() => {
     if (!editingUser) return;
@@ -107,8 +144,22 @@ export default function UsersPage() {
       role: editingUser.role || "VIEWER",
       password: "",
       isActive: editingUser.isActive ?? true,
+      mainCollectorId:
+        editingUser.mainCollectorId && editingUser.mainCollectorId !== editingUser.id
+          ? editingUser.mainCollectorId
+          : '',
     });
   }, [editingUser]);
+
+  useEffect(() => {
+    if (!editingUser) return;
+    if (!editingUser.mainCollectorId || editingUser.mainCollectorId === editingUser.id) {
+      setCollectorSearch('');
+      return;
+    }
+    const collector = users.find((u) => u.id === editingUser.mainCollectorId);
+    setCollectorSearch(collector ? formatUserLabel(collector) : '');
+  }, [editingUser, users]);
 
   useEffect(() => {
     setUsersPage(1);
@@ -128,7 +179,9 @@ export default function UsersPage() {
       role: 'VIEWER',
       password: '',
       isActive: true,
+      mainCollectorId: '',
     });
+    setCollectorSearch('');
     setEditingUserId(null);
     setShowAdd(false);
   };
@@ -147,10 +200,11 @@ export default function UsersPage() {
           address: form.address || null,
           role: form.role,
           isActive: form.isActive,
+          mainCollectorId: form.mainCollectorId || editingUserId,
         };
         await api.patch(`/users/${editingUserId}`, payload);
       } else {
-        const payload = {
+        const payload: any = {
           firstName: form.firstName,
           lastName: form.lastName,
           mobile: form.mobile,
@@ -159,6 +213,9 @@ export default function UsersPage() {
           role: form.role,
           password: form.password,
         };
+        if (form.mainCollectorId) {
+          payload.mainCollectorId = form.mainCollectorId;
+        }
         await api.post('/users', payload);
       }
       await queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -227,6 +284,7 @@ export default function UsersPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Mobile</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Main Collector</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Updated At</TableHead>
@@ -241,6 +299,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell>{formatAuMobile(user.mobile || '')}</TableCell>
                         <TableCell>{user.email || '-'}</TableCell>
+                        <TableCell>{getCollectorLabel(user)}</TableCell>
                         <TableCell>
                           {user.role === 'ADMIN' ? (
                             <Badge className="border-amber-200 bg-amber-50 text-amber-700" variant="outline">
@@ -483,6 +542,56 @@ export default function UsersPage() {
                   />
                 </div>
               )}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="user-collector">Main Collector</Label>
+                <Input
+                  id="user-collector"
+                  value={collectorSearch}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCollectorSearch(value);
+                    if (!value.trim()) {
+                      setForm({ ...form, mainCollectorId: '' });
+                    }
+                  }}
+                  disabled={!isAdmin}
+                  placeholder="Search existing users by name"
+                />
+                {collectorSearch.trim().length > 0 &&
+                  (!form.mainCollectorId ||
+                    collectorSearch.trim().toLowerCase() !== selectedCollectorLabel.toLowerCase()) && (
+                  <div className="max-h-48 overflow-y-auto rounded-md border bg-popover p-1 text-sm">
+                    {collectorOptions.length === 0 ? (
+                      <div className="px-2 py-1.5 text-muted-foreground">
+                        No matches found.
+                      </div>
+                    ) : (
+                      collectorOptions.map((user: any) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                          onClick={() => {
+                            setForm({ ...form, mainCollectorId: user.id });
+                            setCollectorSearch(formatUserLabel(user));
+                          }}
+                        >
+                          <span>{formatUserLabel(user)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {user.role || 'USER'}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to default to the user itself.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Selected: {selectedCollector ? formatUserLabel(selectedCollector) : 'Self (default)'}
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={!isAdmin || formLoading}>

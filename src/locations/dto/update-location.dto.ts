@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class UpdateLocationDto {
   @IsOptional()
@@ -16,6 +16,21 @@ export class UpdateLocationDto {
   @IsOptional()
   @IsString()
   distributorMobile?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  deliveryTimeMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  distributionPriority?: number;
+
+  @IsOptional()
+  @IsString()
+  timeOfDispatch?: string;
 
   @IsOptional()
   @IsString()

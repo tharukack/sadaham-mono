@@ -62,8 +62,8 @@ export class OrdersService {
           pickupByCustomer: true,
           campaign: true,
           pickupLocation: true,
-          createdBy: true,
-          updatedBy: true,
+          createdBy: { include: { mainCollector: true } },
+          updatedBy: { include: { mainCollector: true } },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -84,8 +84,8 @@ export class OrdersService {
         pickupByCustomer: true,
         campaign: true,
         pickupLocation: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -100,8 +100,8 @@ export class OrdersService {
         pickupByCustomer: true,
         campaign: true,
         pickupLocation: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     if (!order) return null;
@@ -150,8 +150,8 @@ export class OrdersService {
         pickupByCustomer: true,
         pickupLocation: true,
         campaign: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     if (existing) {
@@ -175,8 +175,8 @@ export class OrdersService {
             pickupByCustomer: true,
             pickupLocation: true,
             campaign: true,
-            createdBy: true,
-            updatedBy: true,
+            createdBy: { include: { mainCollector: true } },
+            updatedBy: { include: { mainCollector: true } },
           },
         });
         await this.sendOrderConfirmation(restored);
@@ -205,8 +205,8 @@ export class OrdersService {
         pickupByCustomer: true,
         pickupLocation: true,
         campaign: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     await this.sendOrderConfirmation(created);
@@ -221,8 +221,8 @@ export class OrdersService {
         customer: true,
         pickupByCustomer: true,
         pickupLocation: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     if (!order) {
@@ -252,8 +252,8 @@ export class OrdersService {
         pickupByCustomer: true,
         pickupLocation: true,
         campaign: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     await this.sendOrderConfirmation(updated);
@@ -268,8 +268,8 @@ export class OrdersService {
         customer: true,
         pickupByCustomer: true,
         pickupLocation: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     if (!order) {
@@ -294,8 +294,8 @@ export class OrdersService {
         pickupByCustomer: true,
         pickupLocation: true,
         campaign: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
   }
@@ -308,8 +308,8 @@ export class OrdersService {
         customer: true,
         pickupByCustomer: true,
         pickupLocation: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
     if (!order) {
@@ -334,8 +334,8 @@ export class OrdersService {
         pickupByCustomer: true,
         pickupLocation: true,
         campaign: true,
-        createdBy: true,
-        updatedBy: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
       },
     });
   }

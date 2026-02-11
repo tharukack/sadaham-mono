@@ -101,6 +101,10 @@ export function OrderDetailsModal({
   const createdByName = order.createdBy
     ? `${order.createdBy.firstName} ${order.createdBy.lastName}`.trim()
     : '-';
+  const mainCollectorName = order.createdBy?.mainCollector
+    ? `${order.createdBy.mainCollector.firstName || ''} ${order.createdBy.mainCollector.lastName || ''}`.trim()
+    : '';
+  const mainCollectorLabel = mainCollectorName || createdByName || '-';
   const [smsLocal, setSmsLocal] = useState<any[]>([]);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
 
@@ -288,6 +292,10 @@ export function OrderDetailsModal({
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-muted-foreground">Order Entered User</span>
                       <span className="text-right font-medium">{createdByName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Main Collector</span>
+                      <span className="text-right font-medium">{mainCollectorLabel}</span>
                     </div>
                   </div>
                 </CardContent>

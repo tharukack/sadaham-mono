@@ -35,6 +35,9 @@ export default function LocationsPage() {
     address: '',
     distributorName: '',
     distributorMobile: '',
+    deliveryTimeMinutes: '',
+    distributionPriority: '',
+    timeOfDispatch: '',
     distributorCustomerId: '',
     transporterCustomerId: '',
   });
@@ -56,6 +59,17 @@ export default function LocationsPage() {
     () => locations.find((loc) => loc.id === editingId),
     [locations, editingId]
   );
+  const formatDispatchTime = (value?: string) => {
+    if (!value) return '-';
+    if (/(am|pm)/i.test(value)) return value;
+    const [hoursRaw, minutesRaw] = value.split(':');
+    const hours = Number(hoursRaw);
+    const minutes = Number(minutesRaw);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 === 0 ? 12 : hours % 12;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
 
   useEffect(() => {
     if (!editingLocation) return;
@@ -64,6 +78,15 @@ export default function LocationsPage() {
       address: editingLocation.address || '',
       distributorName: editingLocation.distributorName || '',
       distributorMobile: normalizeAuMobile(editingLocation.distributorMobile || ''),
+      deliveryTimeMinutes:
+        typeof editingLocation.deliveryTimeMinutes === 'number'
+          ? editingLocation.deliveryTimeMinutes.toString()
+          : '',
+      distributionPriority:
+        typeof editingLocation.distributionPriority === 'number'
+          ? editingLocation.distributionPriority.toString()
+          : '',
+      timeOfDispatch: editingLocation.timeOfDispatch || '',
       distributorCustomerId: editingLocation.distributorCustomerId || '',
       transporterCustomerId: editingLocation.transporterCustomerId || '',
     });
@@ -98,6 +121,9 @@ export default function LocationsPage() {
       address: '',
       distributorName: '',
       distributorMobile: '',
+      deliveryTimeMinutes: '',
+      distributionPriority: '',
+      timeOfDispatch: '',
       distributorCustomerId: '',
       transporterCustomerId: '',
     });
@@ -127,11 +153,40 @@ export default function LocationsPage() {
     e.preventDefault();
     if (!isAdmin) return;
     setFormLoading(true);
+    if (!form.distributorCustomerId) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing distributor',
+        description: 'Select a distributor before saving.',
+      });
+      setFormLoading(false);
+      return;
+    }
+    if (!form.transporterCustomerId) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing transporter',
+        description: 'Select a transporter before saving.',
+      });
+      setFormLoading(false);
+      return;
+    }
+    const toNumberOrUndefined = (value: string) => {
+      if (!value.trim()) return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const payload = {
+      ...form,
+      deliveryTimeMinutes: toNumberOrUndefined(form.deliveryTimeMinutes),
+      distributionPriority: toNumberOrUndefined(form.distributionPriority),
+      timeOfDispatch: form.timeOfDispatch.trim() ? form.timeOfDispatch : undefined,
+    };
     try {
       if (editingId) {
-        await api.patch(`/locations/${editingId}`, form);
+        await api.patch(`/locations/${editingId}`, payload);
       } else {
-        await api.post('/locations', form);
+        await api.post('/locations', payload);
       }
       await queryClient.invalidateQueries({ queryKey: ['locations'] });
       toast({ title: editingId ? 'Location updated' : 'Location created' });
@@ -165,132 +220,171 @@ export default function LocationsPage() {
         }
       />
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Location' : 'Add Location'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="location-name">Location Name</Label>
-              <Input
-                id="location-name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-                disabled={!isAdmin}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="location-address">Address</Label>
-              <Input
-                id="location-address"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                required
-                disabled={!isAdmin}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Distributor</Label>
-              <Input
-                value={distributorSearch}
-                onChange={(e) => setDistributorSearch(e.target.value)}
-                placeholder="Search customer by name or mobile"
-                disabled={!isAdmin}
-              />
-            </div>
-            {distributorSearch.trim().length > 0 && (
-              <div className="rounded-md border">
-                {distributorQuery.isLoading ? (
-                  <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
-                ) : (distributorQuery.data || []).length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
-                ) : (
-                  (distributorQuery.data || []).map((c: any) => (
-                    <Button
-                      key={c.id}
-                      type="button"
-                      variant={form.distributorCustomerId === c.id ? 'secondary' : 'ghost'}
-                      className="w-full justify-start rounded-none"
-                      onClick={() => {
-                        setForm({
-                          ...form,
-                          distributorCustomerId: c.id,
-                          distributorName: `${c.firstName} ${c.lastName}`.trim(),
-                          distributorMobile: normalizeAuMobile(c.mobile || ''),
-                        });
-                        const fullName = `${c.firstName} ${c.lastName}`.trim();
-                        const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
-                        setDistributorLabel(`${fullName}${mobile}`);
-                        setDistributorSearch('');
-                      }}
-                      disabled={!isAdmin}
-                    >
-                      <div className="text-left">
-                        <div className="text-sm font-medium">
-                          {c.firstName} {c.lastName}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatAuMobile(c.mobile || '')}
-                        </div>
-                      </div>
-                    </Button>
-                  ))
-                )}
+          <form onSubmit={submit} className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="location-name">Location Name</Label>
+                <Input
+                  id="location-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                  disabled={!isAdmin}
+                />
               </div>
-            )}
-            <div className="text-sm text-muted-foreground">
-              Distributor:{' '}
-              {form.distributorCustomerId
-                ? distributorLabel || 'Selected'
-                : form.distributorName || 'Not selected'}
-            </div>
-            <div className="space-y-2">
-              <Label>Transporter (Customer)</Label>
-              <Input
-                value={transporterSearch}
-                onChange={(e) => setTransporterSearch(e.target.value)}
-                placeholder="Search customer by name or mobile"
-                disabled={!isAdmin}
-              />
-            </div>
-            {transporterSearch.trim().length > 0 && (
-              <div className="rounded-md border">
-                {transporterQuery.isLoading ? (
-                  <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
-                ) : (transporterQuery.data || []).length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
-                ) : (
-                  (transporterQuery.data || []).map((c: any) => (
-                    <Button
-                      key={c.id}
-                      type="button"
-                      variant={form.transporterCustomerId === c.id ? 'secondary' : 'ghost'}
-                      className="w-full justify-start rounded-none"
-                      onClick={() => {
-                        setForm({ ...form, transporterCustomerId: c.id });
-                        const fullName = `${c.firstName} ${c.lastName}`.trim();
-                        const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
-                        setTransporterLabel(`${fullName}${mobile}`);
-                        setTransporterSearch('');
-                      }}
-                      disabled={!isAdmin}
-                    >
-                      <div className="text-left">
-                        <div className="text-sm font-medium">
-                          {c.firstName} {c.lastName}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatAuMobile(c.mobile || '')}
-                        </div>
-                      </div>
-                    </Button>
-                  ))
-                )}
+              <div className="space-y-2">
+                <Label htmlFor="location-address">Address</Label>
+                <Input
+                  id="location-address"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  required
+                  disabled={!isAdmin}
+                />
               </div>
-            )}
-            <div className="text-sm text-muted-foreground">
-              Transporter: {form.transporterCustomerId ? transporterLabel || 'Selected' : 'Not selected'}
+              <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="delivery-time-minutes">Delivery Time (Minutes)</Label>
+                  <Input
+                    id="delivery-time-minutes"
+                    type="number"
+                    min={0}
+                    value={form.deliveryTimeMinutes}
+                    onChange={(e) => setForm({ ...form, deliveryTimeMinutes: e.target.value })}
+                    disabled={!isAdmin}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="distribution-priority">Distribution Priority (1-99)</Label>
+                  <Input
+                    id="distribution-priority"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={form.distributionPriority}
+                    onChange={(e) => setForm({ ...form, distributionPriority: e.target.value })}
+                    disabled={!isAdmin}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time-of-dispatch">Time of Dispatch</Label>
+                  <Input
+                    id="time-of-dispatch"
+                    type="time"
+                    value={form.timeOfDispatch}
+                    onChange={(e) => setForm({ ...form, timeOfDispatch: e.target.value })}
+                    disabled={!isAdmin}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Distributor</Label>
+                <Input
+                  value={distributorSearch}
+                  onChange={(e) => setDistributorSearch(e.target.value)}
+                  placeholder="Search customer by name or mobile"
+                  disabled={!isAdmin}
+                />
+                {distributorSearch.trim().length > 0 && (
+                  <div className="max-h-36 overflow-auto rounded-md border">
+                    {distributorQuery.isLoading ? (
+                      <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
+                    ) : (distributorQuery.data || []).length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
+                    ) : (
+                      (distributorQuery.data || []).map((c: any) => (
+                        <Button
+                          key={c.id}
+                          type="button"
+                          variant={form.distributorCustomerId === c.id ? 'secondary' : 'ghost'}
+                          className="w-full justify-start rounded-none"
+                          onClick={() => {
+                            setForm({
+                              ...form,
+                              distributorCustomerId: c.id,
+                              distributorName: `${c.firstName} ${c.lastName}`.trim(),
+                              distributorMobile: normalizeAuMobile(c.mobile || ''),
+                            });
+                            const fullName = `${c.firstName} ${c.lastName}`.trim();
+                            const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
+                            setDistributorLabel(`${fullName}${mobile}`);
+                            setDistributorSearch('');
+                          }}
+                          disabled={!isAdmin}
+                        >
+                          <div className="text-left">
+                            <div className="text-sm font-medium">
+                              {c.firstName} {c.lastName}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatAuMobile(c.mobile || '')}
+                            </div>
+                          </div>
+                        </Button>
+                      ))
+                    )}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Distributor:{' '}
+                  {form.distributorCustomerId
+                    ? distributorLabel || 'Selected'
+                    : form.distributorName || 'Not selected'}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Transporter</Label>
+                <Input
+                  value={transporterSearch}
+                  onChange={(e) => setTransporterSearch(e.target.value)}
+                  placeholder="Search customer by name or mobile"
+                  disabled={!isAdmin}
+                />
+                {transporterSearch.trim().length > 0 && (
+                  <div className="max-h-36 overflow-auto rounded-md border">
+                    {transporterQuery.isLoading ? (
+                      <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
+                    ) : (transporterQuery.data || []).length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
+                    ) : (
+                      (transporterQuery.data || []).map((c: any) => (
+                        <Button
+                          key={c.id}
+                          type="button"
+                          variant={form.transporterCustomerId === c.id ? 'secondary' : 'ghost'}
+                          className="w-full justify-start rounded-none"
+                          onClick={() => {
+                            setForm({ ...form, transporterCustomerId: c.id });
+                            const fullName = `${c.firstName} ${c.lastName}`.trim();
+                            const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
+                            setTransporterLabel(`${fullName}${mobile}`);
+                            setTransporterSearch('');
+                          }}
+                          disabled={!isAdmin}
+                        >
+                          <div className="text-left">
+                            <div className="text-sm font-medium">
+                              {c.firstName} {c.lastName}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatAuMobile(c.mobile || '')}
+                            </div>
+                          </div>
+                        </Button>
+                      ))
+                    )}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Transporter: {form.transporterCustomerId ? transporterLabel || 'Selected' : 'Not selected'}
+                </div>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={!isAdmin || formLoading}>
@@ -328,6 +422,9 @@ export default function LocationsPage() {
                   <TableHead>Address</TableHead>
                   <TableHead>Distributor</TableHead>
                   <TableHead>Transporter</TableHead>
+                  <TableHead>Delivery Time (Min)</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Dispatch Time</TableHead>
                   {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -369,6 +466,13 @@ export default function LocationsPage() {
                         '-'
                       )}
                     </TableCell>
+                    <TableCell>
+                      {typeof loc.deliveryTimeMinutes === 'number' ? loc.deliveryTimeMinutes : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {typeof loc.distributionPriority === 'number' ? loc.distributionPriority : '-'}
+                    </TableCell>
+                    <TableCell>{formatDispatchTime(loc.timeOfDispatch)}</TableCell>
                     {isAdmin && (
                       <TableCell className="text-right">
                         <Button

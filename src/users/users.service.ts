@@ -18,16 +18,23 @@ export class UsersService {
 
   async create(dto: CreateUserDto) {
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    return this.prisma.user.create({
-      data: {
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        mobile: dto.mobile,
-        email: dto.email,
-        address: dto.address,
-        role: dto.role,
-        passwordHash,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          mobile: dto.mobile,
+          email: dto.email,
+          address: dto.address,
+          role: dto.role,
+          passwordHash,
+        },
+      });
+      const mainCollectorId = dto.mainCollectorId ?? created.id;
+      return tx.user.update({
+        where: { id: created.id },
+        data: { mainCollectorId },
+      });
     });
   }
 

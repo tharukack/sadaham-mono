@@ -204,6 +204,7 @@ export default function Dashboard() {
     if (!selectedCampaign?.id) return [];
     return (ordersQuery.data || []) as any[];
   }, [ordersQuery.data, selectedCampaign?.id]);
+  const activeOrders = useMemo(() => orders.filter((order: any) => !order.deletedAt), [orders]);
 
   const sortedOrders = useMemo(() => {
     const next = [...orders];
@@ -783,7 +784,8 @@ export default function Dashboard() {
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="text-lg font-semibold">{selectedCampaign.name}</div>
                   <Badge variant="secondary">{selectedCampaign.state}</Badge>
-                  <Badge variant="outline">Orders: {orders.length}</Badge>
+                  <Badge variant="outline">All Orders: {orders.length}</Badge>
+                  <Badge variant="outline">Active Orders: {activeOrders.length}</Badge>
                   {isFallback && (
                     <span className="text-sm text-muted-foreground">
                       Showing last ended campaign

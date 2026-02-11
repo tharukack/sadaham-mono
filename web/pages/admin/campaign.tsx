@@ -205,6 +205,15 @@ export default function CampaignPage() {
     queryFn: async () => (await api.get('/orders')).data,
     enabled: !!currentCampaign,
   });
+  const orderCountsByCampaign = useMemo(() => {
+    const map = new Map<string, number>();
+    (orders || []).forEach((order: any) => {
+      const id = order.campaignId;
+      if (!id) return;
+      map.set(id, (map.get(id) || 0) + 1);
+    });
+    return map;
+  }, [orders]);
 
   const canCreateOrders =
     (isAdmin || isEditor) && currentCampaign && currentCampaign.state === 'STARTED';
@@ -700,6 +709,7 @@ export default function CampaignPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>State</TableHead>
                       <TableHead>Started</TableHead>
+                      <TableHead>Orders</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -737,6 +747,7 @@ export default function CampaignPage() {
                                 })
                               : '-'}
                           </TableCell>
+                          <TableCell>{orderCountsByCampaign.get(campaign.id) || 0}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex flex-wrap justify-end gap-2">
                               {isAdmin && campaign.state === 'STARTED' && (
