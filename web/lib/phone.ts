@@ -24,5 +24,13 @@ export function normalizeAuMobile(input: string): string {
 }
 
 export function formatAuMobile(input: string): string {
-  return normalizeAuMobile(input);
+  const normalized = normalizeAuMobile(input);
+  if (!normalized) return normalized;
+
+  const digits = normalized.replace(/\D/g, '');
+  if (digits.length === 10 && digits.startsWith('0')) {
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+
+  return normalized;
 }

@@ -45,13 +45,21 @@ export class OrdersService {
     const template = await this.smsService.getTemplateByName('Order Confirmation');
     if (!template?.body) return;
     const body = this.interpolateTemplate(template.body, order);
-    await this.smsService.send({
-      body,
-      to: [mobile],
-      campaignId: order.campaignId,
-      orderId: order.id,
-      customerId: order.customerId,
-    });
+    try {
+      await this.smsService.send({
+        body,
+        to: [mobile],
+        campaignId: order.campaignId,
+        orderId: order.id,
+        customerId: order.customerId,
+      });
+      return;
+    } catch (err: any) {
+      const message = err?.message || 'SMS send failed.';
+      // Do not fail order creation if SMS fails.
+      console.warn('[SMS] Order confirmation failed:', message);
+      return message;
+    }
   }
 
   async list(user: User) {
@@ -128,11 +136,14 @@ export class OrdersService {
 
   async create(dto: CreateOrderDto, user: User) {
     const current = await this.prisma.campaign.findFirst({
-      where: { state: CampaignState.STARTED },
+      where: { state: { in: [CampaignState.STARTED, CampaignState.FROZEN] } },
       orderBy: { startedAt: 'desc' },
     });
     if (!current) {
       throw new BadRequestException('No active campaign to create orders.');
+    }
+    if (current.state === CampaignState.FROZEN && user.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only admins can create orders in frozen campaigns.');
     }
     if (dto.campaignId && dto.campaignId !== current.id) {
       throw new BadRequestException('Orders can only be created for the current campaign.');
@@ -179,8 +190,8 @@ export class OrdersService {
             updatedBy: { include: { mainCollector: true } },
           },
         });
-        await this.sendOrderConfirmation(restored);
-        return restored;
+        const smsError = await this.sendOrderConfirmation(restored);
+        return smsError ? { ...restored, smsError } : restored;
       }
       return existing;
     }
@@ -209,8 +220,8 @@ export class OrdersService {
         updatedBy: { include: { mainCollector: true } },
       },
     });
-    await this.sendOrderConfirmation(created);
-    return created;
+    const smsError = await this.sendOrderConfirmation(created);
+    return smsError ? { ...created, smsError } : created;
   }
 
   async update(id: string, dto: UpdateOrderDto, user: User) {
@@ -256,8 +267,8 @@ export class OrdersService {
         updatedBy: { include: { mainCollector: true } },
       },
     });
-    await this.sendOrderConfirmation(updated);
-    return updated;
+    const smsError = await this.sendOrderConfirmation(updated);
+    return smsError ? { ...updated, smsError } : updated;
   }
 
   async softDelete(id: string, user: User) {

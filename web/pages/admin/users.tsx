@@ -104,6 +104,44 @@ export default function UsersPage() {
     () => users.find((u) => u.id === editingUserId),
     [users, editingUserId]
   );
+  const isEditDirty = useMemo(() => {
+    if (!editingUserId || !editingUser) return true;
+    const current = {
+      firstName: (form.firstName || '').trim(),
+      lastName: (form.lastName || '').trim(),
+      mobile: normalizeAuMobile(form.mobile || ''),
+      email: (form.email || '').trim(),
+      address: (form.address || '').trim(),
+      role: form.role,
+      isActive: form.isActive,
+      mainCollectorId: form.mainCollectorId || '',
+    };
+    const original = {
+      firstName: (editingUser.firstName || '').trim(),
+      lastName: (editingUser.lastName || '').trim(),
+      mobile: normalizeAuMobile(editingUser.mobile || ''),
+      email: (editingUser.email || '').trim(),
+      address: (editingUser.address || '').trim(),
+      role: editingUser.role || 'VIEWER',
+      isActive: editingUser.isActive ?? true,
+      mainCollectorId:
+        editingUser.mainCollectorId && editingUser.mainCollectorId !== editingUser.id
+          ? editingUser.mainCollectorId
+          : '',
+    };
+    return JSON.stringify(current) !== JSON.stringify(original);
+  }, [
+    editingUser,
+    editingUserId,
+    form.address,
+    form.email,
+    form.firstName,
+    form.isActive,
+    form.lastName,
+    form.mainCollectorId,
+    form.mobile,
+    form.role,
+  ]);
   const formatUserLabel = (user: any) => {
     const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
     return name || 'Unnamed user';
@@ -594,7 +632,10 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={!isAdmin || formLoading}>
+              <Button
+                type="submit"
+                disabled={!isAdmin || formLoading || (editingUserId ? !isEditDirty : false)}
+              >
                 {formLoading ? 'Saving...' : 'Save'}
               </Button>
               <Button variant="secondary" type="button" onClick={resetForm}>

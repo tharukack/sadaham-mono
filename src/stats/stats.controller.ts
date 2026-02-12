@@ -14,4 +14,16 @@ export class StatsController {
   statsByCampaigns(@Body() body: { campaignIds?: string[] }) {
     return this.statsService.statsByCampaigns(body?.campaignIds || []);
   }
+
+  @Post('compare-campaigns')
+  @Roles(Role.ADMIN)
+  compareCampaigns(
+    @Body()
+    body: { baselineCampaignId?: string; compareCampaignIds?: string[] },
+  ) {
+    return this.statsService.compareCampaigns(
+      body?.baselineCampaignId || '',
+      body?.compareCampaignIds || [],
+    );
+  }
 }

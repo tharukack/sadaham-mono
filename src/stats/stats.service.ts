@@ -3,6 +3,15 @@ import { SmsStatus } from '@prisma/client';
 import { PrismaService } from '../common/utils/prisma.service';
 
 type OrdersTimelinePoint = { date: string; orders: number };
+type CustomerLite = { customerId: string; mobile: string; firstName: string; lastName: string };
+type MealTotals = {
+  chicken: number;
+  fish: number;
+  veg: number;
+  egg: number;
+  other: number;
+  totalMeals: number;
+};
 
 @Injectable()
 export class StatsService {
@@ -49,6 +58,28 @@ export class StatsService {
       return 'orderConfirmation';
     }
     return 'bulk';
+  }
+
+  private toMealTotals(order: {
+    chickenQty: number | null;
+    fishQty: number | null;
+    vegQty: number | null;
+    eggQty: number | null;
+    otherQty: number | null;
+  }): MealTotals {
+    const chicken = order.chickenQty || 0;
+    const fish = order.fishQty || 0;
+    const veg = order.vegQty || 0;
+    const egg = order.eggQty || 0;
+    const other = order.otherQty || 0;
+    return {
+      chicken,
+      fish,
+      veg,
+      egg,
+      other,
+      totalMeals: chicken + fish + veg + egg + other,
+    };
   }
 
   async statsByCampaigns(campaignIds: string[]) {
@@ -464,6 +495,254 @@ export class StatsService {
             .sort((a, b) => b.count - a.count),
         },
       },
+    };
+  }
+
+  async compareCampaigns(baselineCampaignId: string, compareCampaignIds: string[]) {
+    const baselineId = (baselineCampaignId || '').trim();
+    const compareIds = Array.from(
+      new Set((compareCampaignIds || []).filter((id) => id && id !== baselineId)),
+    );
+    if (!baselineId) {
+      throw new BadRequestException('Baseline campaign is required.');
+    }
+    if (!compareIds.length) {
+      throw new BadRequestException('At least one compare campaign is required.');
+    }
+
+    const allIds = [baselineId, ...compareIds];
+    const campaigns = await this.prisma.campaign.findMany({
+      where: { id: { in: allIds } },
+    });
+    if (campaigns.length !== allIds.length) {
+      throw new BadRequestException('Campaigns not found.');
+    }
+
+    const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+
+    const orders = await this.prisma.order.findMany({
+      where: { campaignId: { in: allIds }, deletedAt: null },
+      select: {
+        campaignId: true,
+        customerId: true,
+        chickenQty: true,
+        fishQty: true,
+        vegQty: true,
+        eggQty: true,
+        otherQty: true,
+        customer: { select: { id: true, mobile: true, firstName: true, lastName: true } },
+      },
+    });
+
+    const ordersByCampaign = new Map<string, typeof orders>();
+    orders.forEach((order) => {
+      const list = ordersByCampaign.get(order.campaignId) || [];
+      list.push(order);
+      ordersByCampaign.set(order.campaignId, list);
+    });
+
+    const buildCustomerMap = (campaignId: string) => {
+      const campaignOrders = ordersByCampaign.get(campaignId) || [];
+      const map = new Map<string, { customer: CustomerLite; meals: MealTotals }>();
+      campaignOrders.forEach((order) => {
+        if (!order.customer) return;
+        map.set(order.customerId, {
+          customer: {
+            customerId: order.customer.id,
+            mobile: order.customer.mobile || '',
+            firstName: order.customer.firstName || '',
+            lastName: order.customer.lastName || '',
+          },
+          meals: this.toMealTotals(order),
+        });
+      });
+      return map;
+    };
+
+    const baselineMap = buildCustomerMap(baselineId);
+    const baselineCustomers = Array.from(baselineMap.keys());
+
+    const presenceDiff = compareIds.map((compareId) => {
+      const compareMap = buildCustomerMap(compareId);
+      const compareCustomers = Array.from(compareMap.keys());
+
+      const newlyAddedCustomers: CustomerLite[] = [];
+      const didNotOrderCustomers: CustomerLite[] = [];
+
+      compareCustomers.forEach((customerId) => {
+        if (!baselineMap.has(customerId)) {
+          const entry = compareMap.get(customerId);
+          if (entry) newlyAddedCustomers.push(entry.customer);
+        }
+      });
+
+      baselineCustomers.forEach((customerId) => {
+        if (!compareMap.has(customerId)) {
+          const entry = baselineMap.get(customerId);
+          if (entry) didNotOrderCustomers.push(entry.customer);
+        }
+      });
+
+      return {
+        compareCampaignId: compareId,
+        newlyAddedCustomers,
+        didNotOrderCustomers,
+        counts: {
+          baselineCustomers: baselineCustomers.length,
+          compareCustomers: compareCustomers.length,
+          newlyAdded: newlyAddedCustomers.length,
+          didNotOrder: didNotOrderCustomers.length,
+        },
+      };
+    });
+
+    const perCustomerDelta = compareIds.map((compareId) => {
+      const compareMap = buildCustomerMap(compareId);
+      const compareTotalMeals = Array.from(compareMap.values()).reduce(
+        (sum, entry) => sum + entry.meals.totalMeals,
+        0,
+      );
+
+      const union = new Set<string>([...baselineMap.keys(), ...compareMap.keys()]);
+      const rows = Array.from(union).map((customerId) => {
+        const baselineEntry = baselineMap.get(customerId);
+        const compareEntry = compareMap.get(customerId);
+        const baselineMeals = baselineEntry?.meals ?? {
+          chicken: 0,
+          fish: 0,
+          veg: 0,
+          egg: 0,
+          other: 0,
+          totalMeals: 0,
+        };
+        const compareMeals = compareEntry?.meals ?? {
+          chicken: 0,
+          fish: 0,
+          veg: 0,
+          egg: 0,
+          other: 0,
+          totalMeals: 0,
+        };
+        const deltaMeals = {
+          chicken: compareMeals.chicken - baselineMeals.chicken,
+          fish: compareMeals.fish - baselineMeals.fish,
+          veg: compareMeals.veg - baselineMeals.veg,
+          egg: compareMeals.egg - baselineMeals.egg,
+          other: compareMeals.other - baselineMeals.other,
+          totalMeals: compareMeals.totalMeals - baselineMeals.totalMeals,
+        };
+
+        let classification: 'NEW' | 'DROPPED' | 'INCREASED' | 'DECREASED' | 'UNCHANGED' = 'UNCHANGED';
+        if (!baselineEntry && compareEntry) {
+          classification = 'NEW';
+        } else if (baselineEntry && !compareEntry) {
+          classification = 'DROPPED';
+        } else if (compareMeals.totalMeals > baselineMeals.totalMeals) {
+          classification = 'INCREASED';
+        } else if (compareMeals.totalMeals < baselineMeals.totalMeals) {
+          classification = 'DECREASED';
+        }
+
+        const customer = (compareEntry || baselineEntry)?.customer || {
+          customerId,
+          mobile: '',
+          firstName: '',
+          lastName: '',
+        };
+
+        return {
+          customerId,
+          mobile: customer.mobile,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          baseline: {
+            hasOrder: !!baselineEntry,
+            ...baselineMeals,
+          },
+          compare: {
+            hasOrder: !!compareEntry,
+            ...compareMeals,
+          },
+          delta: deltaMeals,
+          deltaPct: {
+            totalMealsPct:
+              baselineMeals.totalMeals === 0
+                ? null
+                : (deltaMeals.totalMeals / baselineMeals.totalMeals) * 100,
+          },
+          classification,
+        };
+      });
+
+      rows.sort((a, b) => Math.abs(b.delta.totalMeals) - Math.abs(a.delta.totalMeals));
+
+      const summary = rows.reduce(
+        (acc, row) => {
+          acc.totalBaselineMeals += row.baseline.totalMeals;
+          acc.totalCompareMeals += row.compare.totalMeals;
+          acc.netMealChange += row.delta.totalMeals;
+          switch (row.classification) {
+            case 'NEW':
+              acc.newCount += 1;
+              break;
+            case 'DROPPED':
+              acc.droppedCount += 1;
+              break;
+            case 'INCREASED':
+              acc.increasedCount += 1;
+              break;
+            case 'DECREASED':
+              acc.decreasedCount += 1;
+              break;
+            case 'UNCHANGED':
+              acc.unchangedCount += 1;
+              break;
+            default:
+              break;
+          }
+          return acc;
+        },
+        {
+          newCount: 0,
+          droppedCount: 0,
+          increasedCount: 0,
+          decreasedCount: 0,
+          unchangedCount: 0,
+          netMealChange: 0,
+          totalBaselineMeals: 0,
+          totalCompareMeals: 0,
+        },
+      );
+
+      return {
+        compareCampaignId: compareId,
+        rows,
+        summary,
+      };
+    });
+
+    const baseline = campaignById.get(baselineId);
+    const compares = compareIds.map((id) => campaignById.get(id)).filter(Boolean);
+
+    return {
+      baseline: baseline
+        ? {
+            id: baseline.id,
+            name: baseline.name,
+            startedAt: baseline.startedAt,
+            endedAt: baseline.endedAt,
+            state: baseline.state,
+          }
+        : null,
+      compares: compares.map((campaign) => ({
+        id: campaign!.id,
+        name: campaign!.name,
+        startedAt: campaign!.startedAt,
+        endedAt: campaign!.endedAt,
+        state: campaign!.state,
+      })),
+      presenceDiff,
+      perCustomerDelta,
     };
   }
 }

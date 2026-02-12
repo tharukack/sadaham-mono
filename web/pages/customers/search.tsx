@@ -18,7 +18,7 @@ import {
 import { Badge } from '../../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../components/ui/use-toast';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
 
 export default function CustomerSearchPage() {
@@ -33,6 +33,7 @@ export default function CustomerSearchPage() {
   const [customersSortBy, setCustomersSortBy] = useState<'created' | 'updated' | 'name'>(
     'updated',
   );
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
   const { toast } = useToast();
 
   const canAccess = currentRole === 'ADMIN' || currentRole === 'EDITOR';
@@ -59,13 +60,24 @@ export default function CustomerSearchPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['customer-search', term],
-    queryFn: async () => (await api.get('/customers/search', { params: { q: term } })).data,
+    queryFn: async () =>
+      (await api.get('/customers/search', { params: { q: term, includeDeleted: 1 } })).data,
     enabled: canAccess,
   });
 
   const customers = useMemo(() => (data || []) as any[], [data]);
+  const filteredCustomers = useMemo(() => {
+    if (statusFilter === 'active') {
+      return customers.filter((c: any) => !c.deletedAt);
+    }
+    if (statusFilter === 'deleted') {
+      return customers.filter((c: any) => !!c.deletedAt);
+    }
+    return customers;
+  }, [customers, statusFilter]);
+
   const sortedCustomers = useMemo(() => {
-    const next = [...customers];
+    const next = [...filteredCustomers];
     next.sort((a: any, b: any) => {
       if (customersSortBy === 'name') {
         const aName = `${a.firstName || ''} ${a.lastName || ''}`.trim();
@@ -81,7 +93,7 @@ export default function CustomerSearchPage() {
       return bDate - aDate;
     });
     return next;
-  }, [customers, customersSortBy]);
+  }, [filteredCustomers, customersSortBy]);
 
   const customersPageCount = useMemo(() => {
     return Math.max(1, Math.ceil(sortedCustomers.length / customersRowsPerPage));
@@ -106,9 +118,26 @@ export default function CustomerSearchPage() {
     });
   }, [editingCustomer]);
 
+  const isEditDirty = useMemo(() => {
+    if (!editingId || !editingCustomer) return true;
+    const current = {
+      firstName: (form.firstName || '').trim(),
+      lastName: (form.lastName || '').trim(),
+      mobile: normalizeAuMobile(form.mobile || ''),
+      address: (form.address || '').trim(),
+    };
+    const original = {
+      firstName: (editingCustomer.firstName || '').trim(),
+      lastName: (editingCustomer.lastName || '').trim(),
+      mobile: normalizeAuMobile(editingCustomer.mobile || ''),
+      address: (editingCustomer.address || '').trim(),
+    };
+    return JSON.stringify(current) !== JSON.stringify(original);
+  }, [editingCustomer, editingId, form.address, form.firstName, form.lastName, form.mobile]);
+
   useEffect(() => {
     setCustomersPage(1);
-  }, [term, customersSortBy]);
+  }, [term, customersSortBy, statusFilter]);
 
   useEffect(() => {
     setCustomersPage((prev) => Math.min(Math.max(prev, 1), customersPageCount));
@@ -174,6 +203,21 @@ export default function CustomerSearchPage() {
     }
   };
 
+  const restoreCustomer = async (id: string) => {
+    if (!canDelete) return;
+    try {
+      await api.patch(`/customers/${id}/restore`);
+      await queryClient.invalidateQueries({ queryKey: ['customer-search'] });
+      toast({ title: 'Customer restored' });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Restore failed',
+        description: err?.response?.data?.message || 'Unable to restore customer.',
+      });
+    }
+  };
+
   if (!canAccess) {
     return (
       <AppShell title="Customer Search">
@@ -211,12 +255,26 @@ export default function CustomerSearchPage() {
               Add Customer
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2 pt-3">
+          <div className="flex items-center gap-2 pt-3">
             <Input
+              className="flex-1 min-w-[200px]"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               placeholder="Search by name or mobile"
             />
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as 'all' | 'active' | 'deleted')}
+            >
+              <SelectTrigger className="h-10 w-[180px]">
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="all">All customers</SelectItem>
+                <SelectItem value="active">Active only</SelectItem>
+                <SelectItem value="deleted">Deleted only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -264,7 +322,7 @@ export default function CustomerSearchPage() {
                         </TableCell>
                         <TableCell>
                           {c.deletedAt ? (
-                            <Badge variant="secondary">Deleted</Badge>
+                            <Badge variant="destructive">Deleted</Badge>
                           ) : (
                             <Badge variant="outline">Active</Badge>
                           )}
@@ -275,30 +333,43 @@ export default function CustomerSearchPage() {
                             : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
+                          {c.deletedAt ? (
                             <Button
                               size="icon"
                               variant="secondary"
                               className="h-7 w-7"
-                              onClick={() => {
-                                setShowAdd(false);
-                                setEditingId(c.id);
-                              }}
-                              aria-label="Edit customer"
-                            >
-                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              className="h-7 w-7"
+                              onClick={() => restoreCustomer(c.id)}
                               disabled={!canDelete}
-                              onClick={() => softDelete(c.id)}
-                              aria-label="Delete customer"
+                              aria-label="Restore customer"
                             >
-                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                             </Button>
-                          </div>
+                          ) : (
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                size="icon"
+                                variant="secondary"
+                                className="h-7 w-7"
+                                onClick={() => {
+                                  setShowAdd(false);
+                                  setEditingId(c.id);
+                                }}
+                                aria-label="Edit customer"
+                              >
+                                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="destructive"
+                                className="h-7 w-7"
+                                disabled={!canDelete}
+                                onClick={() => softDelete(c.id)}
+                                aria-label="Delete customer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -433,7 +504,7 @@ export default function CustomerSearchPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={formLoading}>
+              <Button type="submit" disabled={formLoading || (editingId ? !isEditDirty : false)}>
                 {formLoading ? 'Saving...' : 'Save'}
               </Button>
               <Button variant="secondary" type="button" onClick={resetForm}>

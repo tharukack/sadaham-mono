@@ -20,8 +20,8 @@ export class CustomersController {
 
   @Get('search')
   @Roles(Role.ADMIN, Role.EDITOR)
-  search(@Query('q') q: string) {
-    return this.customersService.search(q || '');
+  search(@Query('q') q: string, @Query('includeDeleted') includeDeleted?: string) {
+    return this.customersService.search(q || '', includeDeleted === '1' || includeDeleted === 'true');
   }
 
   @Post()
@@ -52,5 +52,15 @@ export class CustomersController {
       throw new ForbiddenException('Missing authenticated user');
     }
     return this.customersService.softDelete(id, userId);
+  }
+
+  @Patch(':id/restore')
+  @Roles(Role.ADMIN)
+  restore(@Param('id') id: string, @Req() req: Request) {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      throw new ForbiddenException('Missing authenticated user');
+    }
+    return this.customersService.restore(id, userId);
   }
 }

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { normalizeAuMobile } from '../common/utils/phone';
 import { PrismaService } from '../common/utils/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -17,13 +18,23 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto) {
+    const normalizedMobile = normalizeAuMobile(dto.mobile || '');
+    if (normalizedMobile) {
+      const existing = await this.prisma.user.findFirst({
+        where: { mobile: normalizedMobile },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new BadRequestException('User already in the system.');
+      }
+    }
     const passwordHash = await bcrypt.hash(dto.password, 10);
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
           firstName: dto.firstName,
           lastName: dto.lastName,
-          mobile: dto.mobile,
+          mobile: normalizedMobile || dto.mobile,
           email: dto.email,
           address: dto.address,
           role: dto.role,
@@ -38,7 +49,20 @@ export class UsersService {
     });
   }
 
-  update(id: string, dto: UpdateUserDto) {
-    return this.prisma.user.update({ where: { id }, data: dto });
+  async update(id: string, dto: UpdateUserDto) {
+    const normalizedMobile = normalizeAuMobile(dto.mobile || '');
+    if (normalizedMobile) {
+      const existing = await this.prisma.user.findFirst({
+        where: { mobile: normalizedMobile, NOT: { id } },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new BadRequestException('User already in the system.');
+      }
+    }
+    return this.prisma.user.update({
+      where: { id },
+      data: { ...dto, mobile: normalizedMobile || dto.mobile },
+    });
   }
 }

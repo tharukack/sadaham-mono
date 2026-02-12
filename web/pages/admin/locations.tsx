@@ -29,6 +29,8 @@ export default function LocationsPage() {
   const { toast } = useToast();
 
   const isAdmin = currentRole === 'ADMIN';
+  const isDistributorSearchMobile = !!distributorSearch.trim() && /\d/.test(distributorSearch);
+  const isTransporterSearchMobile = !!transporterSearch.trim() && /\d/.test(transporterSearch);
 
   const [form, setForm] = useState({
     name: '',
@@ -319,10 +321,22 @@ export default function LocationsPage() {
                           disabled={!isAdmin}
                         >
                           <div className="text-left">
-                            <div className="text-sm font-medium">
+                            <div
+                              className={
+                                isDistributorSearchMobile
+                                  ? 'text-xs text-muted-foreground'
+                                  : 'text-sm font-medium'
+                              }
+                            >
                               {c.firstName} {c.lastName}
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div
+                              className={
+                                isDistributorSearchMobile
+                                  ? 'text-sm font-medium'
+                                  : 'text-xs text-muted-foreground'
+                              }
+                            >
                               {formatAuMobile(c.mobile || '')}
                             </div>
                           </div>
@@ -369,10 +383,22 @@ export default function LocationsPage() {
                           disabled={!isAdmin}
                         >
                           <div className="text-left">
-                            <div className="text-sm font-medium">
+                            <div
+                              className={
+                                isTransporterSearchMobile
+                                  ? 'text-xs text-muted-foreground'
+                                  : 'text-sm font-medium'
+                              }
+                            >
                               {c.firstName} {c.lastName}
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div
+                              className={
+                                isTransporterSearchMobile
+                                  ? 'text-sm font-medium'
+                                  : 'text-xs text-muted-foreground'
+                              }
+                            >
                               {formatAuMobile(c.mobile || '')}
                             </div>
                           </div>

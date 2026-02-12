@@ -23,6 +23,7 @@ import {
 import { useToast } from '../../components/ui/use-toast';
 import { Pencil, Trash2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
+import { formatAuMobile } from '../../lib/phone';
 
 export default function OrdersPage() {
   const [currentRole, setCurrentRole] = useState<string>('');
@@ -47,6 +48,7 @@ export default function OrdersPage() {
     queryFn: async () => (await api.get('/orders')).data,
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
   const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'updated' | 'name'>('updated');
@@ -65,17 +67,31 @@ export default function OrdersPage() {
 
   const orders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
+    const termDigits = term.replace(/\D/g, '');
     const currentCampaignId = currentCampaignQuery.data?.id;
     const scoped = currentCampaignId
       ? (ordersQuery.data || []).filter((order: any) => order.campaignId === currentCampaignId)
       : [];
-    if (!term) return scoped;
-    return scoped.filter((order: any) => {
+    const statusScoped =
+      statusFilter === 'active'
+        ? scoped.filter((order: any) => !order.deletedAt)
+        : statusFilter === 'deleted'
+        ? scoped.filter((order: any) => !!order.deletedAt)
+        : scoped;
+    if (!term) return statusScoped;
+    return statusScoped.filter((order: any) => {
       const customerName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim();
       const pickup = order.pickupLocation?.name || '';
-      return customerName.toLowerCase().includes(term) || pickup.toLowerCase().includes(term);
+      const mobile = order.customer?.mobile || '';
+      const mobileDigits = mobile.replace(/\D/g, '');
+      const matchesMobile = termDigits ? mobileDigits.includes(termDigits) : false;
+      return (
+        customerName.toLowerCase().includes(term) ||
+        pickup.toLowerCase().includes(term) ||
+        matchesMobile
+      );
     });
-  }, [ordersQuery.data, searchTerm, currentCampaignQuery.data?.id]);
+  }, [ordersQuery.data, searchTerm, currentCampaignQuery.data?.id, statusFilter]);
 
   const sortedOrders = useMemo(() => {
     const next = [...orders];
@@ -107,7 +123,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     setOrdersPage(1);
-  }, [searchTerm, currentCampaignQuery.data?.id, ordersSortBy]);
+  }, [searchTerm, currentCampaignQuery.data?.id, ordersSortBy, statusFilter]);
 
   useEffect(() => {
     setOrdersPage((prev) => Math.min(Math.max(prev, 1), ordersPageCount));
@@ -156,7 +172,9 @@ export default function OrdersPage() {
 
   const isAdmin = currentRole === 'ADMIN';
   const isEditor = currentRole === 'EDITOR';
-  const canCreateOrders = currentCampaignQuery.data?.state === 'STARTED' && (isAdmin || isEditor);
+  const canCreateOrders =
+    (currentCampaignQuery.data?.state === 'STARTED' && (isAdmin || isEditor)) ||
+    (currentCampaignQuery.data?.state === 'FROZEN' && isAdmin);
   const canEditOrders =
     currentCampaignQuery.data?.state === 'STARTED'
       ? isAdmin || isEditor
@@ -180,7 +198,7 @@ export default function OrdersPage() {
     if (!editingOrderId || !canEditOrders) return;
     setEditSaving(true);
     try {
-      await api.patch(`/orders/${editingOrderId}`, {
+      const response = await api.patch(`/orders/${editingOrderId}`, {
         chickenQty: Number(editForm.chickenQty || 0),
         fishQty: Number(editForm.fishQty || 0),
         vegQty: Number(editForm.vegQty || 0),
@@ -191,6 +209,13 @@ export default function OrdersPage() {
       await ordersQuery.refetch();
       setEditingOrderId(null);
       toast({ title: 'Order updated' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -265,12 +290,26 @@ export default function OrdersPage() {
               <Link href="/dashboard?addOrder=1">Add Order</Link>
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2 pt-3">
+          <div className="flex items-center gap-2 pt-3">
             <Input
-              placeholder="Search orders by customer or pickup location"
+              className="flex-1 min-w-[220px]"
+              placeholder="Search orders by customer, pickup location, or mobile"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as 'all' | 'active' | 'deleted')}
+            >
+              <SelectTrigger className="h-10 w-[180px]">
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="all">All orders</SelectItem>
+                <SelectItem value="active">Active only</SelectItem>
+                <SelectItem value="deleted">Deleted only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -293,6 +332,7 @@ export default function OrdersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 z-10 bg-background">Customer</TableHead>
+                    <TableHead>Mobile</TableHead>
                     <TableHead>Pickup Location</TableHead>
                     <TableHead>Pickup By</TableHead>
                     <TableHead>Meal Packets</TableHead>
@@ -321,6 +361,7 @@ export default function OrdersPage() {
                             {order.customer?.firstName} {order.customer?.lastName}
                           </button>
                         </TableCell>
+                        <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
                         <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
                         <TableCell>
                           {order.pickupByCustomer
@@ -358,7 +399,7 @@ export default function OrdersPage() {
                         </TableCell>
                         <TableCell>
                           {isDeleted ? (
-                            <Badge variant="secondary">Deleted</Badge>
+                            <Badge variant="destructive">Deleted</Badge>
                           ) : (
                             <Badge variant="outline">Active</Badge>
                           )}

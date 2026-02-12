@@ -20,6 +20,7 @@ import { PageHeader } from '../components/page-header';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Checkbox } from '../components/ui/checkbox';
 import {
   Command,
   CommandEmpty,
@@ -28,10 +29,19 @@ import {
   CommandItem,
   CommandList,
 } from '../components/ui/command';
+import { Input } from '../components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { Separator } from '../components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { formatAuMobile } from '../lib/phone';
 
 type Campaign = {
   id: string;
@@ -115,6 +125,78 @@ type StatsResponse = {
   };
 };
 
+type CustomerLite = {
+  customerId: string;
+  mobile: string;
+  firstName: string;
+  lastName: string;
+};
+
+type CampaignCompareResponse = {
+  baseline: Campaign;
+  compares: Campaign[];
+  presenceDiff: Array<{
+    compareCampaignId: string;
+    newlyAddedCustomers: CustomerLite[];
+    didNotOrderCustomers: CustomerLite[];
+    counts: {
+      baselineCustomers: number;
+      compareCustomers: number;
+      newlyAdded: number;
+      didNotOrder: number;
+    };
+  }>;
+  perCustomerDelta: Array<{
+    compareCampaignId: string;
+    rows: Array<{
+      customerId: string;
+      mobile: string;
+      firstName: string;
+      lastName: string;
+      baseline: {
+        hasOrder: boolean;
+        chicken: number;
+        fish: number;
+        veg: number;
+        egg: number;
+        other: number;
+        totalMeals: number;
+      };
+      compare: {
+        hasOrder: boolean;
+        chicken: number;
+        fish: number;
+        veg: number;
+        egg: number;
+        other: number;
+        totalMeals: number;
+      };
+      delta: {
+        chicken: number;
+        fish: number;
+        veg: number;
+        egg: number;
+        other: number;
+        totalMeals: number;
+      };
+      deltaPct: {
+        totalMealsPct: number | null;
+      };
+      classification: 'NEW' | 'DROPPED' | 'INCREASED' | 'DECREASED' | 'UNCHANGED';
+    }>;
+    summary: {
+      newCount: number;
+      droppedCount: number;
+      increasedCount: number;
+      decreasedCount: number;
+      unchangedCount: number;
+      netMealChange: number;
+      totalBaselineMeals: number;
+      totalCompareMeals: number;
+    };
+  }>;
+};
+
 function formatDate(date?: string | null) {
   if (!date) return '-';
   const parsed = new Date(date);
@@ -129,6 +211,39 @@ function formatPercent(value: number) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('en-AU').format(value || 0);
+}
+
+function formatName(customer: { firstName?: string; lastName?: string }) {
+  return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown';
+}
+
+function downloadCsv(filename: string, rows: Array<Record<string, string | number>>) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const escapeCell = (value: string | number) => {
+    const stringValue = String(value ?? '');
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+  const csv = [headers.join(','), ...rows.map((row) => headers.map((h) => escapeCell(row[h])).join(','))].join(
+    '\n',
+  );
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function toFileSlug(value: string) {
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return slug || 'campaign';
 }
 
 function SkeletonCard({ title }: { title: string }) {
@@ -149,6 +264,21 @@ export default function StatsPage() {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
+  const [presenceSearch, setPresenceSearch] = useState<
+    Record<string, { newlyAdded: string; didNotOrder: string }>
+  >({});
+  const [deltaFilters, setDeltaFilters] = useState<
+    Record<
+      string,
+      {
+        search: string;
+        classification: 'ALL' | 'NEW' | 'DROPPED' | 'INCREASED' | 'DECREASED' | 'UNCHANGED';
+        significantOnly: boolean;
+        page: number;
+        pageSize: number;
+      }
+    >
+  >({});
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -194,15 +324,31 @@ export default function StatsPage() {
     enabled: currentRole === 'ADMIN' && appliedIds.length > 0,
   });
 
+  const compareCampaignQuery = useQuery<CampaignCompareResponse>({
+    queryKey: ['stats-compare-campaigns', appliedIds],
+    queryFn: async () =>
+      (
+        await api.post('/stats/compare-campaigns', {
+          baselineCampaignId: appliedIds[0],
+          compareCampaignIds: appliedIds.slice(1),
+        })
+      ).data,
+    enabled: currentRole === 'ADMIN' && appliedIds.length >= 2,
+  });
+
   const isAdmin = currentRole === 'ADMIN';
   const campaigns = campaignsQuery.data || [];
   const stats = statsQuery.data;
   const combined = stats?.combined;
+  const compareData = compareCampaignQuery.data;
+  const compareCampaignMap = useMemo(() => {
+    return new Map((compareData?.compares || []).map((campaign) => [campaign.id, campaign]));
+  }, [compareData?.compares]);
 
-  const selectedCampaigns = useMemo(
-    () => campaigns.filter((campaign) => selectedIds.includes(campaign.id)),
-    [campaigns, selectedIds],
-  );
+  const selectedCampaigns = useMemo(() => {
+    const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+    return selectedIds.map((id) => campaignById.get(id)).filter(Boolean) as Campaign[];
+  }, [campaigns, selectedIds]);
 
   const combinedMealTotals = combined?.meals?.totals || {
     chicken: 0,
@@ -283,6 +429,9 @@ export default function StatsPage() {
   const smsFailureReasons = combined?.sms.failureReasons || [];
 
   const isLoadingStats = statsQuery.isLoading || statsQuery.isFetching;
+  const isLoadingCompare = compareCampaignQuery.isLoading || compareCampaignQuery.isFetching;
+  const comparePresence = compareData?.presenceDiff || [];
+  const compareDeltas = compareData?.perCustomerDelta || [];
 
   const defaultSelectionLabel = currentCampaignQuery.data
     ? 'Active campaign'
@@ -293,6 +442,28 @@ export default function StatsPage() {
   const selectionLabel = selectedIds.length
     ? `${selectedIds.length} campaign${selectedIds.length === 1 ? '' : 's'} selected`
     : 'Select campaigns';
+
+  const getPresenceFilter = (compareId: string) =>
+    presenceSearch[compareId] || { newlyAdded: '', didNotOrder: '' };
+
+  const getDeltaFilter = (compareId: string) =>
+    deltaFilters[compareId] || {
+      search: '',
+      classification: 'ALL' as const,
+      significantOnly: false,
+      page: 1,
+      pageSize: 50,
+    };
+
+  const filterCustomers = (customers: CustomerLite[], term: string) => {
+    const needle = term.trim().toLowerCase();
+    if (!needle) return customers;
+    return customers.filter((customer) => {
+      const name = `${customer.firstName || ''} ${customer.lastName || ''}`.toLowerCase();
+      const mobile = customer.mobile || '';
+      return name.includes(needle) || mobile.includes(needle);
+    });
+  };
 
   return (
     <AppShell title="Stats">
@@ -362,7 +533,10 @@ export default function StatsPage() {
                   Clear
                 </Button>
                 <Button
-                  onClick={() => setAppliedIds(Array.from(new Set(selectedIds)).sort())}
+                  onClick={() => {
+                    const ordered = selectedIds.filter((id, index) => selectedIds.indexOf(id) === index);
+                    setAppliedIds(ordered);
+                  }}
                   disabled={selectedIds.length === 0}
                 >
                   Apply
@@ -375,9 +549,25 @@ export default function StatsPage() {
                     Choose one or more campaigns to load stats.
                   </span>
                 ) : (
-                  selectedCampaigns.map((campaign) => (
+                  selectedCampaigns.map((campaign, index) => (
                     <Badge key={campaign.id} variant="outline" className="flex items-center gap-2">
-                      {campaign.name}
+                      <span>{campaign.name}</span>
+                      {index === 0 ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Baseline
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() =>
+                            setSelectedIds((prev) => [campaign.id, ...prev.filter((id) => id !== campaign.id)])
+                          }
+                        >
+                          Set as baseline
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -416,6 +606,9 @@ export default function StatsPage() {
                 <TabsTrigger value="pickup">Pickup Locations</TabsTrigger>
                 <TabsTrigger value="sms">SMS</TabsTrigger>
                 <TabsTrigger value="compare">Compare Campaigns</TabsTrigger>
+                {selectedIds.length >= 2 ? (
+                  <TabsTrigger value="compare-customers">Compare Customers</TabsTrigger>
+                ) : null}
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -1168,6 +1361,590 @@ export default function StatsPage() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="compare-customers" className="space-y-6">
+                {selectedIds.length < 2 ? (
+                  <Card>
+                    <CardContent className="p-6 text-sm text-muted-foreground">
+                      Select at least 2 campaigns to compare.
+                    </CardContent>
+                  </Card>
+                ) : appliedIds.length < 2 ? (
+                  <Card>
+                    <CardContent className="p-6 text-sm text-muted-foreground">
+                      Apply your selection to load comparison data.
+                    </CardContent>
+                  </Card>
+                ) : compareCampaignQuery.isError ? (
+                  <Card>
+                    <CardContent className="p-6 text-sm text-destructive">
+                      Failed to load comparison data. Please try again.
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    <Card>
+                      <CardHeader className="gap-2 pb-4">
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <span>Baseline:</span>
+                          <Badge variant="outline">
+                            {compareData?.baseline?.name || selectedCampaigns[0]?.name || '-'}
+                          </Badge>
+                          <span>Compared:</span>
+                          {(compareData?.compares || selectedCampaigns.slice(1)).length === 0 ? (
+                            <span className="text-muted-foreground">-</span>
+                          ) : (
+                            (compareData?.compares || selectedCampaigns.slice(1)).map((campaign) => (
+                              <Badge key={campaign.id} variant="secondary">
+                                {campaign.name}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </CardHeader>
+                    </Card>
+
+                    <Tabs defaultValue="presence" className="space-y-6">
+                      <TabsList className="flex flex-wrap">
+                        <TabsTrigger value="presence">Presence Diff</TabsTrigger>
+                        <TabsTrigger value="growth">Growth / Reduction</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="presence" className="space-y-6">
+                        {isLoadingCompare ? (
+                          <Card>
+                            <CardContent className="p-6 text-sm text-muted-foreground">
+                              Loading presence diffs...
+                            </CardContent>
+                          </Card>
+                        ) : comparePresence.length === 0 ? (
+                          <Card>
+                            <CardContent className="p-6 text-sm text-muted-foreground">
+                              No presence diff data available.
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          comparePresence.map((presence) => {
+                            const compareCampaign =
+                              compareCampaignMap.get(presence.compareCampaignId) ||
+                              selectedCampaigns.find((c) => c.id === presence.compareCampaignId);
+                            const filters = getPresenceFilter(presence.compareCampaignId);
+                            const newlyAdded = filterCustomers(
+                              presence.newlyAddedCustomers,
+                              filters.newlyAdded,
+                            );
+                            const didNotOrder = filterCustomers(
+                              presence.didNotOrderCustomers,
+                              filters.didNotOrder,
+                            );
+
+                            return (
+                              <Card key={presence.compareCampaignId} className="space-y-4">
+                                <CardHeader>
+                                  <CardTitle className="text-base">
+                                    Compared campaign: {compareCampaign?.name || 'Unknown'}
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                                    <span>
+                                      Baseline customers: {formatNumber(presence.counts.baselineCustomers)}
+                                    </span>
+                                    <span>
+                                      Compare customers: {formatNumber(presence.counts.compareCustomers)}
+                                    </span>
+                                    <span>Newly added: {formatNumber(presence.counts.newlyAdded)}</span>
+                                    <span>Did not order: {formatNumber(presence.counts.didNotOrder)}</span>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const slug = toFileSlug(compareCampaign?.name || 'compare');
+                                        const rows = [
+                                          ...presence.newlyAddedCustomers.map((customer) => ({
+                                            status: 'NEWLY_ADDED',
+                                            name: formatName(customer),
+                                            mobile: formatAuMobile(customer.mobile || ''),
+                                          })),
+                                          ...presence.didNotOrderCustomers.map((customer) => ({
+                                            status: 'DID_NOT_ORDER',
+                                            name: formatName(customer),
+                                            mobile: formatAuMobile(customer.mobile || ''),
+                                          })),
+                                        ];
+                                        downloadCsv(`presence-diff-${slug}.csv`, rows);
+                                      }}
+                                    >
+                                      Export Presence CSV
+                                    </Button>
+                                  </div>
+
+                                  <div className="grid gap-4 lg:grid-cols-2">
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-sm">Newly Added vs Baseline</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="space-y-3">
+                                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                          <span>Count</span>
+                                          <span className="font-medium text-foreground">
+                                            {formatNumber(presence.counts.newlyAdded)}
+                                          </span>
+                                        </div>
+                                        <Input
+                                          value={filters.newlyAdded}
+                                          onChange={(event) =>
+                                            setPresenceSearch((prev) => ({
+                                              ...prev,
+                                              [presence.compareCampaignId]: {
+                                                ...filters,
+                                                newlyAdded: event.target.value,
+                                              },
+                                            }))
+                                          }
+                                          placeholder="Search by name or mobile"
+                                        />
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Name</TableHead>
+                                              <TableHead>Mobile</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {newlyAdded.length === 0 ? (
+                                              <TableRow>
+                                                <TableCell colSpan={2} className="text-sm text-muted-foreground">
+                                                  No customers.
+                                                </TableCell>
+                                              </TableRow>
+                                            ) : (
+                                              newlyAdded.map((customer) => (
+                                                <TableRow key={customer.customerId}>
+                                                  <TableCell className="font-medium">
+                                                    {formatName(customer)}
+                                                  </TableCell>
+                                                  <TableCell>{formatAuMobile(customer.mobile || '')}</TableCell>
+                                                </TableRow>
+                                              ))
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-sm">Did Not Order vs Baseline</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="space-y-3">
+                                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                          <span>Count</span>
+                                          <span className="font-medium text-foreground">
+                                            {formatNumber(presence.counts.didNotOrder)}
+                                          </span>
+                                        </div>
+                                        <Input
+                                          value={filters.didNotOrder}
+                                          onChange={(event) =>
+                                            setPresenceSearch((prev) => ({
+                                              ...prev,
+                                              [presence.compareCampaignId]: {
+                                                ...filters,
+                                                didNotOrder: event.target.value,
+                                              },
+                                            }))
+                                          }
+                                          placeholder="Search by name or mobile"
+                                        />
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Name</TableHead>
+                                              <TableHead>Mobile</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {didNotOrder.length === 0 ? (
+                                              <TableRow>
+                                                <TableCell colSpan={2} className="text-sm text-muted-foreground">
+                                                  No customers.
+                                                </TableCell>
+                                              </TableRow>
+                                            ) : (
+                                              didNotOrder.map((customer) => (
+                                                <TableRow key={customer.customerId}>
+                                                  <TableCell className="font-medium">
+                                                    {formatName(customer)}
+                                                  </TableCell>
+                                                  <TableCell>{formatAuMobile(customer.mobile || '')}</TableCell>
+                                                </TableRow>
+                                              ))
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })
+                        )}
+                      </TabsContent>
+
+                      <TabsContent value="growth" className="space-y-6">
+                        {isLoadingCompare ? (
+                          <Card>
+                            <CardContent className="p-6 text-sm text-muted-foreground">
+                              Loading growth analysis...
+                            </CardContent>
+                          </Card>
+                        ) : compareDeltas.length === 0 ? (
+                          <Card>
+                            <CardContent className="p-6 text-sm text-muted-foreground">
+                              No growth data available.
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          compareDeltas.map((delta) => {
+                            const compareCampaign =
+                              compareCampaignMap.get(delta.compareCampaignId) ||
+                              selectedCampaigns.find((c) => c.id === delta.compareCampaignId);
+                            const filter = getDeltaFilter(delta.compareCampaignId);
+                            const filteredRows = delta.rows.filter((row) => {
+                              if (filter.classification !== 'ALL' && row.classification !== filter.classification) {
+                                return false;
+                              }
+                              if (filter.significantOnly && Math.abs(row.delta.totalMeals) < 5) {
+                                return false;
+                              }
+                              const term = filter.search.trim().toLowerCase();
+                              if (!term) return true;
+                              const name = `${row.firstName || ''} ${row.lastName || ''}`.toLowerCase();
+                              return name.includes(term) || (row.mobile || '').includes(term);
+                            });
+                            const pageSize = filter.pageSize;
+                            const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+                            const currentPage = Math.min(filter.page, pageCount);
+                            const pageStart = (currentPage - 1) * pageSize;
+                            const pagedRows = filteredRows.slice(pageStart, pageStart + pageSize);
+                            const chartData = [
+                              { name: 'NEW', value: delta.summary.newCount },
+                              { name: 'DROPPED', value: delta.summary.droppedCount },
+                              { name: 'INCREASED', value: delta.summary.increasedCount },
+                              { name: 'DECREASED', value: delta.summary.decreasedCount },
+                              { name: 'UNCHANGED', value: delta.summary.unchangedCount },
+                            ];
+
+                            return (
+                              <Card key={delta.compareCampaignId} className="space-y-4">
+                                <CardHeader>
+                                  <CardTitle className="text-base">
+                                    Compared campaign: {compareCampaign?.name || 'Unknown'}
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">New Customers</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.newCount)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Dropped Customers</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.droppedCount)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Increased</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.increasedCount)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Decreased</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.decreasedCount)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Unchanged</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.unchangedCount)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Net Meal Change</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.netMealChange)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Baseline Meals</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.totalBaselineMeals)}
+                                      </CardContent>
+                                    </Card>
+                                    <Card>
+                                      <CardHeader>
+                                        <CardTitle className="text-xs">Compare Meals</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="text-2xl font-semibold">
+                                        {formatNumber(delta.summary.totalCompareMeals)}
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+
+                                  <Card className="h-full">
+                                    <CardHeader>
+                                      <CardTitle className="text-sm">Classification Breakdown</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="h-72">
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={chartData}>
+                                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                          <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                                          <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                                          <Tooltip />
+                                          <Bar dataKey="value" fill="hsl(var(--primary))" />
+                                        </BarChart>
+                                      </ResponsiveContainer>
+                                    </CardContent>
+                                  </Card>
+
+                                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                                    <Input
+                                      value={filter.search}
+                                      onChange={(event) =>
+                                        setDeltaFilters((prev) => ({
+                                          ...prev,
+                                          [delta.compareCampaignId]: {
+                                            ...filter,
+                                            search: event.target.value,
+                                            page: 1,
+                                          },
+                                        }))
+                                      }
+                                      placeholder="Search by name or mobile"
+                                      className="w-full md:w-64"
+                                    />
+                                    <Select
+                                      value={filter.classification}
+                                      onValueChange={(value) =>
+                                        setDeltaFilters((prev) => ({
+                                          ...prev,
+                                          [delta.compareCampaignId]: {
+                                            ...filter,
+                                            classification: value as typeof filter.classification,
+                                            page: 1,
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger className="h-8 w-[200px]">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent align="start">
+                                        <SelectItem value="ALL">All classifications</SelectItem>
+                                        <SelectItem value="NEW">New</SelectItem>
+                                        <SelectItem value="DROPPED">Dropped</SelectItem>
+                                        <SelectItem value="INCREASED">Increased</SelectItem>
+                                        <SelectItem value="DECREASED">Decreased</SelectItem>
+                                        <SelectItem value="UNCHANGED">Unchanged</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <label className="flex items-center gap-2 text-sm">
+                                      <Checkbox
+                                        checked={filter.significantOnly}
+                                        onCheckedChange={(value) =>
+                                          setDeltaFilters((prev) => ({
+                                            ...prev,
+                                            [delta.compareCampaignId]: {
+                                              ...filter,
+                                              significantOnly: Boolean(value),
+                                              page: 1,
+                                            },
+                                          }))
+                                        }
+                                      />
+                                      Only significant changes
+                                    </label>
+                                    <Select
+                                      value={String(filter.pageSize)}
+                                      onValueChange={(value) =>
+                                        setDeltaFilters((prev) => ({
+                                          ...prev,
+                                          [delta.compareCampaignId]: {
+                                            ...filter,
+                                            pageSize: Number(value),
+                                            page: 1,
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger className="h-8 w-[120px]">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent align="start">
+                                        <SelectItem value="50">50 rows</SelectItem>
+                                        <SelectItem value="100">100 rows</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const slug = toFileSlug(compareCampaign?.name || 'compare');
+                                        const rows = delta.rows.map((row) => ({
+                                          name: `${row.firstName || ''} ${row.lastName || ''}`.trim(),
+                                          mobile: formatAuMobile(row.mobile || ''),
+                                          classification: row.classification,
+                                          baselineTotalMeals: row.baseline.totalMeals,
+                                          compareTotalMeals: row.compare.totalMeals,
+                                          deltaTotalMeals: row.delta.totalMeals,
+                                          deltaPercent:
+                                            row.deltaPct.totalMealsPct === null
+                                              ? ''
+                                              : row.deltaPct.totalMealsPct.toFixed(2),
+                                          deltaChicken: row.delta.chicken,
+                                          deltaFish: row.delta.fish,
+                                          deltaVeg: row.delta.veg,
+                                          deltaEgg: row.delta.egg,
+                                          deltaOther: row.delta.other,
+                                        }));
+                                        downloadCsv(`growth-delta-${slug}.csv`, rows);
+                                      }}
+                                    >
+                                      Export Growth CSV
+                                    </Button>
+                                  </div>
+
+                                  <div className="w-full overflow-x-auto">
+                                    <Table className="min-w-[1100px] whitespace-nowrap text-sm">
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Customer</TableHead>
+                                          <TableHead>Mobile</TableHead>
+                                          <TableHead>Baseline Meals</TableHead>
+                                          <TableHead>Compare Meals</TableHead>
+                                          <TableHead>Δ Meals</TableHead>
+                                          <TableHead>Δ %</TableHead>
+                                          <TableHead>Δ Chicken</TableHead>
+                                          <TableHead>Δ Fish</TableHead>
+                                          <TableHead>Δ Veg</TableHead>
+                                          <TableHead>Δ Egg</TableHead>
+                                          <TableHead>Δ Other</TableHead>
+                                          <TableHead>Classification</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {pagedRows.length === 0 ? (
+                                          <TableRow>
+                                            <TableCell colSpan={12} className="text-sm text-muted-foreground">
+                                              No matching customers.
+                                            </TableCell>
+                                          </TableRow>
+                                        ) : (
+                                          pagedRows.map((row) => (
+                                            <TableRow key={row.customerId}>
+                                              <TableCell className="font-medium">
+                                                {formatName(row)}
+                                              </TableCell>
+                                              <TableCell>{formatAuMobile(row.mobile || '')}</TableCell>
+                                              <TableCell>{formatNumber(row.baseline.totalMeals)}</TableCell>
+                                              <TableCell>{formatNumber(row.compare.totalMeals)}</TableCell>
+                                              <TableCell>{formatNumber(row.delta.totalMeals)}</TableCell>
+                                              <TableCell>
+                                                {row.deltaPct.totalMealsPct === null
+                                                  ? '—'
+                                                  : `${row.deltaPct.totalMealsPct.toFixed(1)}%`}
+                                              </TableCell>
+                                              <TableCell>{formatNumber(row.delta.chicken)}</TableCell>
+                                              <TableCell>{formatNumber(row.delta.fish)}</TableCell>
+                                              <TableCell>{formatNumber(row.delta.veg)}</TableCell>
+                                              <TableCell>{formatNumber(row.delta.egg)}</TableCell>
+                                              <TableCell>{formatNumber(row.delta.other)}</TableCell>
+                                              <TableCell>
+                                                <Badge variant="outline">{row.classification}</Badge>
+                                              </TableCell>
+                                            </TableRow>
+                                          ))
+                                        )}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                                    <span>
+                                      {filteredRows.length === 0
+                                        ? '0 of 0'
+                                        : `${pageStart + 1}-${Math.min(
+                                            pageStart + pageSize,
+                                            filteredRows.length,
+                                          )} of ${filteredRows.length}`}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          setDeltaFilters((prev) => ({
+                                            ...prev,
+                                            [delta.compareCampaignId]: {
+                                              ...filter,
+                                              page: Math.max(1, currentPage - 1),
+                                            },
+                                          }))
+                                        }
+                                        disabled={currentPage <= 1}
+                                      >
+                                        Previous
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          setDeltaFilters((prev) => ({
+                                            ...prev,
+                                            [delta.compareCampaignId]: {
+                                              ...filter,
+                                              page: Math.min(pageCount, currentPage + 1),
+                                            },
+                                          }))
+                                        }
+                                        disabled={currentPage >= pageCount}
+                                      >
+                                        Next
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           )}

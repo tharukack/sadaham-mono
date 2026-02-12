@@ -34,7 +34,7 @@ import { Separator } from '../components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useToast } from '../components/ui/use-toast';
-import { Pencil, Trash2, UserPlus } from 'lucide-react';
+import { Pencil, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import { OrderDetailsModal } from '../components/order-details-modal';
 import { KpiCards } from '../components/dashboard/kpi-cards';
 import { OrdersTrendChart } from '../components/dashboard/orders-trend-chart';
@@ -253,8 +253,8 @@ export default function Dashboard() {
 
   const canCreateOrders =
     !!currentCampaignQuery.data &&
-    currentCampaignQuery.data.state === 'STARTED' &&
-    (isAdmin || isEditor);
+    ((currentCampaignQuery.data.state === 'STARTED' && (isAdmin || isEditor)) ||
+      (currentCampaignQuery.data.state === 'FROZEN' && isAdmin));
   const canEditOrders =
     !!currentCampaignQuery.data &&
     (currentCampaignQuery.data.state === 'STARTED'
@@ -461,10 +461,11 @@ export default function Dashboard() {
         otherQty: Number(orderForm.otherQty || 0),
         note: orderForm.note || undefined,
       };
+      let response;
       if (addExistingOrderId) {
-        await api.patch(`/orders/${addExistingOrderId}`, payload);
+        response = await api.patch(`/orders/${addExistingOrderId}`, payload);
       } else {
-        await api.post('/orders', payload);
+        response = await api.post('/orders', payload);
       }
       setSelectedCustomerId('');
       setPickupByLabel('');
@@ -494,6 +495,13 @@ export default function Dashboard() {
       await statsQuery.refetch();
       setShowAddModal(false);
       toast({ title: addExistingOrderId ? 'Order updated' : 'Order created' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -510,7 +518,7 @@ export default function Dashboard() {
     if (!editingOrderId || !canEditOrders) return;
     setEditSaving(true);
     try {
-      await api.patch(`/orders/${editingOrderId}`, {
+      const response = await api.patch(`/orders/${editingOrderId}`, {
         pickupLocationId: editForm.pickupLocationId,
         pickupByCustomerId: editForm.pickupByCustomerId || undefined,
         chickenQty: Number(editForm.chickenQty || 0),
@@ -526,6 +534,13 @@ export default function Dashboard() {
       await ordersQuery.refetch();
       await statsQuery.refetch();
       toast({ title: 'Order updated' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -603,7 +618,9 @@ export default function Dashboard() {
     open: boolean;
     onOpenChange: (open: boolean) => void;
   }) => {
+    const [searchTerm, setSearchTerm] = useState('');
     const selected = (allCustomersQuery.data || []).find((c: any) => c.id === value) || selectedCustomer;
+    const isMobileSearch = !!searchTerm.trim() && /\d/.test(searchTerm);
 
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
@@ -614,7 +631,11 @@ export default function Dashboard() {
         </PopoverTrigger>
         <PopoverContent className="p-0" align="start">
           <Command>
-            <CommandInput placeholder="Search by name or mobile" />
+            <CommandInput
+              placeholder="Search by name or mobile"
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+            />
             <CommandList>
               {allCustomersQuery.isLoading ? (
                 <CommandEmpty>Loading customers...</CommandEmpty>
@@ -632,10 +653,18 @@ export default function Dashboard() {
                       }}
                     >
                       <div className="text-left">
-                        <div className="text-sm font-medium">
+                        <div
+                          className={
+                            isMobileSearch ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+                          }
+                        >
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className={
+                            isMobileSearch ? 'text-sm font-medium' : 'text-xs text-muted-foreground'
+                          }
+                        >
                           {formatAuMobile(c.mobile || '')}
                         </div>
                       </div>
@@ -665,6 +694,9 @@ export default function Dashboard() {
     onOpenChange: (open: boolean) => void;
     label?: string;
   }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const isMobileSearch = !!searchTerm.trim() && /\d/.test(searchTerm);
+
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
@@ -674,7 +706,11 @@ export default function Dashboard() {
         </PopoverTrigger>
         <PopoverContent className="p-0" align="start">
           <Command>
-            <CommandInput placeholder="Search pickup person by name or mobile" />
+            <CommandInput
+              placeholder="Search pickup person by name or mobile"
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+            />
             <CommandList>
               {allCustomersQuery.isLoading ? (
                 <CommandEmpty>Loading customers...</CommandEmpty>
@@ -694,10 +730,18 @@ export default function Dashboard() {
                       }}
                     >
                       <div className="text-left">
-                        <div className="text-sm font-medium">
+                        <div
+                          className={
+                            isMobileSearch ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+                          }
+                        >
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className={
+                            isMobileSearch ? 'text-sm font-medium' : 'text-xs text-muted-foreground'
+                          }
+                        >
                           {formatAuMobile(c.mobile || '')}
                         </div>
                       </div>
@@ -878,7 +922,7 @@ export default function Dashboard() {
                             </TableCell>
                             <TableCell>
                               {isDeleted ? (
-                                <Badge variant="secondary">Deleted</Badge>
+                                <Badge variant="destructive">Deleted</Badge>
                               ) : (
                                 <Badge variant="outline">Active</Badge>
                               )}
@@ -887,11 +931,13 @@ export default function Dashboard() {
                               {isDeleted ? (
                                 canEditOrders ? (
                                   <Button
-                                    size="sm"
+                                    size="icon"
                                     variant="secondary"
+                                    className="h-7 w-7"
                                     onClick={() => restoreOrder(order.id)}
+                                    aria-label="Restore order"
                                   >
-                                    Restore
+                                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">Deleted</span>

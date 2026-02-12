@@ -129,6 +129,8 @@ export default function CampaignPage() {
   });
   const isAdmin = currentRole === 'ADMIN';
   const isEditor = currentRole === 'EDITOR';
+  const isCustomerSearchMobile = !!customerSearch.trim() && /\d/.test(customerSearch);
+  const isPickupBySearchMobile = !!pickupBySearch.trim() && /\d/.test(pickupBySearch);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -216,7 +218,8 @@ export default function CampaignPage() {
   }, [orders]);
 
   const canCreateOrders =
-    (isAdmin || isEditor) && currentCampaign && currentCampaign.state === 'STARTED';
+    ((isAdmin || isEditor) && currentCampaign && currentCampaign.state === 'STARTED') ||
+    (isAdmin && currentCampaign && currentCampaign.state === 'FROZEN');
   const canEditOrders =
     currentCampaign?.state === 'STARTED'
       ? isAdmin || isEditor
@@ -445,10 +448,11 @@ export default function CampaignPage() {
         otherQty: Number(orderForm.otherQty || 0),
         note: orderForm.note || undefined,
       };
+      let response;
       if (addExistingOrderId) {
-        await api.patch(`/orders/${addExistingOrderId}`, payload);
+        response = await api.patch(`/orders/${addExistingOrderId}`, payload);
       } else {
-        await api.post('/orders', payload);
+        response = await api.post('/orders', payload);
       }
       setSelectedCustomerId('');
       setCustomerSearch('');
@@ -478,6 +482,13 @@ export default function CampaignPage() {
       await queryClient.invalidateQueries({ queryKey: ['orders'] });
       setShowAddModal(false);
       toast({ title: addExistingOrderId ? 'Order updated' : 'Order created' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
       if (typeof window !== 'undefined') {
         localStorage.removeItem('campaignOrderDraft');
       }
@@ -520,7 +531,7 @@ export default function CampaignPage() {
     if (!editingOrderId || !canEditOrders) return;
     setEditSaving(true);
     try {
-      await api.patch(`/orders/${editingOrderId}`, {
+      const response = await api.patch(`/orders/${editingOrderId}`, {
         pickupLocationId: editForm.pickupLocationId,
         pickupByCustomerId: editForm.pickupByCustomerId || undefined,
         chickenQty: Number(editForm.chickenQty || 0),
@@ -536,6 +547,13 @@ export default function CampaignPage() {
       setEditPickupByLabel('');
       await queryClient.invalidateQueries({ queryKey: ['orders'] });
       toast({ title: 'Order updated' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -1381,10 +1399,22 @@ export default function CampaignPage() {
                       disabled={!canCreateOrders}
                     >
                       <div className="text-left">
-                        <div className="text-sm font-medium">
+                        <div
+                          className={
+                            isCustomerSearchMobile
+                              ? 'text-xs text-muted-foreground'
+                              : 'text-sm font-medium'
+                          }
+                        >
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className={
+                            isCustomerSearchMobile
+                              ? 'text-sm font-medium'
+                              : 'text-xs text-muted-foreground'
+                          }
+                        >
                           {formatAuMobile(c.mobile || '')}
                         </div>
                       </div>
@@ -1430,10 +1460,22 @@ export default function CampaignPage() {
                       disabled={!canCreateOrders}
                     >
                       <div className="text-left">
-                        <div className="text-sm font-medium">
+                        <div
+                          className={
+                            isPickupBySearchMobile
+                              ? 'text-xs text-muted-foreground'
+                              : 'text-sm font-medium'
+                          }
+                        >
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className={
+                            isPickupBySearchMobile
+                              ? 'text-sm font-medium'
+                              : 'text-xs text-muted-foreground'
+                          }
+                        >
                           {formatAuMobile(c.mobile || '')}
                         </div>
                       </div>
@@ -1629,10 +1671,22 @@ export default function CampaignPage() {
                       disabled={!canEditOrders}
                     >
                       <div className="text-left">
-                        <div className="text-sm font-medium">
+                        <div
+                          className={
+                            isPickupBySearchMobile
+                              ? 'text-xs text-muted-foreground'
+                              : 'text-sm font-medium'
+                          }
+                        >
                           {c.firstName} {c.lastName}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className={
+                            isPickupBySearchMobile
+                              ? 'text-sm font-medium'
+                              : 'text-xs text-muted-foreground'
+                          }
+                        >
                           {formatAuMobile(c.mobile || '')}
                         </div>
                       </div>
