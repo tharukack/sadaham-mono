@@ -93,6 +93,7 @@ model Campaign {
   id        String         @id @default(uuid())
   name      String
   state     CampaignState  @default(STARTED)
+  eventDate DateTime?
   startedAt DateTime       @default(now())
   frozenAt  DateTime?
   endedAt   DateTime?

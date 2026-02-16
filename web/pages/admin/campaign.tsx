@@ -58,6 +58,7 @@ export default function CampaignPage() {
   const [campaignSaving, setCampaignSaving] = useState(false);
   const [campaignForm, setCampaignForm] = useState({
     name: '',
+    eventDate: '',
     chickenCost: 0,
     fishCost: 0,
     vegCost: 0,
@@ -132,6 +133,16 @@ export default function CampaignPage() {
   const isCustomerSearchMobile = !!customerSearch.trim() && /\d/.test(customerSearch);
   const isPickupBySearchMobile = !!pickupBySearch.trim() && /\d/.test(pickupBySearch);
   const { toast } = useToast();
+  const formatEventDate = (value?: string | Date | null) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+    });
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -171,6 +182,7 @@ export default function CampaignPage() {
     if (!editingCampaign) return;
     setCampaignForm({
       name: editingCampaign.name || '',
+      eventDate: editingCampaign.eventDate ? String(editingCampaign.eventDate).slice(0, 10) : '',
       chickenCost: editingCampaign.chickenCost || 0,
       fishCost: editingCampaign.fishCost || 0,
       vegCost: editingCampaign.vegCost || 0,
@@ -359,10 +371,15 @@ export default function CampaignPage() {
   const submitCampaign = async (e: FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
+    if (!campaignForm.eventDate) {
+      toast({ variant: 'destructive', title: 'Event date is required' });
+      return;
+    }
     setCampaignSaving(true);
     try {
       const payload = {
         name: campaignForm.name,
+        eventDate: campaignForm.eventDate,
         chickenCost: campaignForm.chickenCost,
         fishCost: campaignForm.fishCost,
         vegCost: campaignForm.vegCost,
@@ -378,6 +395,7 @@ export default function CampaignPage() {
       await queryClient.invalidateQueries({ queryKey: ['campaign-current'] });
       setCampaignForm({
         name: '',
+        eventDate: '',
         chickenCost: 0,
         fishCost: 0,
         vegCost: 0,
@@ -689,6 +707,7 @@ export default function CampaignPage() {
                 setEditingCampaign(null);
                 setCampaignForm({
                   name: '',
+                  eventDate: '',
                   chickenCost: 0,
                   fishCost: 0,
                   vegCost: 0,
@@ -721,11 +740,12 @@ export default function CampaignPage() {
           ) : (
             <div className="space-y-3">
               <div className="w-full overflow-x-auto">
-                <Table className="min-w-[1100px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
+                <Table className="min-w-[1200px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>State</TableHead>
+                      <TableHead>Event Date</TableHead>
                       <TableHead>Started</TableHead>
                       <TableHead>Orders</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -756,6 +776,7 @@ export default function CampaignPage() {
                               </Badge>
                             )}
                           </TableCell>
+                          <TableCell>{formatEventDate(campaign.eventDate)}</TableCell>
                           <TableCell>
                             {campaign.startedAt
                               ? new Date(campaign.startedAt).toLocaleString(undefined, {
@@ -1199,6 +1220,7 @@ export default function CampaignPage() {
             setEditingCampaign(null);
             setCampaignForm({
               name: '',
+              eventDate: '',
               chickenCost: 0,
               fishCost: 0,
               vegCost: 0,
@@ -1224,6 +1246,19 @@ export default function CampaignPage() {
                 id="campaign-name"
                 value={campaignForm.name}
                 onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
+                required
+                disabled={!isAdmin}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campaign-event-date">Event Date</Label>
+              <Input
+                id="campaign-event-date"
+                type="date"
+                value={campaignForm.eventDate}
+                onChange={(e) =>
+                  setCampaignForm({ ...campaignForm, eventDate: e.target.value })
+                }
                 required
                 disabled={!isAdmin}
               />

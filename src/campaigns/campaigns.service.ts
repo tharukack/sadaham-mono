@@ -163,6 +163,7 @@ export class CampaignsService {
         id: campaign.id,
         name: campaign.name,
         state: campaign.state,
+        eventDate: campaign.eventDate,
         startedAt: campaign.startedAt,
         frozenAt: campaign.frozenAt,
         endedAt: campaign.endedAt,
@@ -200,7 +201,11 @@ export class CampaignsService {
     if (activeCampaign) {
       throw new BadRequestException('Active campaign already exists. End it before creating a new one.');
     }
-    return this.prisma.campaign.create({ data: dto });
+    const data = {
+      ...dto,
+      eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
+    };
+    return this.prisma.campaign.create({ data });
   }
 
   async update(id: string, dto: UpdateCampaignDto) {
@@ -265,6 +270,10 @@ export class CampaignsService {
       }
     }
 
-    return this.prisma.campaign.update({ where: { id }, data: dto });
+    const data = {
+      ...dto,
+      eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
+    };
+    return this.prisma.campaign.update({ where: { id }, data });
   }
 }

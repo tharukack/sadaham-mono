@@ -1,10 +1,14 @@
-import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { CampaignState } from '@prisma/client';
 
 export class UpdateCampaignDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsDateString()
+  eventDate?: string;
 
   @IsOptional()
   @IsEnum(CampaignState)

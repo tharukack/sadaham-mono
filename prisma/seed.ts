@@ -216,7 +216,12 @@ async function main() {
   const campaign = await prisma.campaign.upsert({
     where: { id: 'starter-campaign' },
     update: {},
-    create: { id: 'starter-campaign', name: 'Launch Week', state: CampaignState.STARTED },
+    create: {
+      id: 'starter-campaign',
+      name: 'Launch Week',
+      state: CampaignState.STARTED,
+      eventDate: new Date(),
+    },
   });
 
   const pickupLocations = await Promise.all(
