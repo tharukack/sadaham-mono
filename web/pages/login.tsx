@@ -21,11 +21,16 @@ export default function LoginPage() {
       const normalizedMobile = normalizeAuMobile(mobile);
       setMobile(normalizedMobile);
       const res = await api.post('/auth/login', { mobile: normalizedMobile, password });
+      const otpToken = res?.data?.otpToken;
+      if (otpToken && typeof window !== 'undefined') {
+        localStorage.setItem('otpToken', otpToken);
+        localStorage.setItem('otpMobile', normalizedMobile);
+      }
       toast({
         title: 'OTP sent',
         description: `Expires at ${res.data.expiresAt}`,
       });
-      router.push({ pathname: '/otp', query: { mobile: normalizedMobile } });
+      router.push('/otp');
     } catch (err: any) {
       toast({
         variant: 'destructive',

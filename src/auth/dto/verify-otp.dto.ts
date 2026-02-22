@@ -1,11 +1,9 @@
-import { IsMobilePhone, IsString, Length } from 'class-validator';
-import { Transform } from 'class-transformer';
-import { normalizeAuMobile } from '../../common/utils/phone';
+import { IsString, Length, MinLength } from 'class-validator';
 
 export class VerifyOtpDto {
-  @IsMobilePhone('en-AU')
-  @Transform(({ value }) => normalizeAuMobile(value))
-  mobile!: string;
+  @IsString()
+  @MinLength(10)
+  otpToken!: string;
 
   @IsString()
   @Length(6, 6)

@@ -9,6 +9,8 @@ import { UpdateTemplateDto } from './dto/update-template.dto';
 import { Request } from 'express';
 import twilio from 'twilio';
 import { ConfigService } from '@nestjs/config';
+import { CreateBatchDto } from './dto/create-batch.dto';
+import { UpdateBatchDto } from './dto/update-batch.dto';
 
 @Controller('sms')
 @UseGuards(RolesGuard)
@@ -43,6 +45,47 @@ export class SmsController {
   @Roles(Role.ADMIN, Role.EDITOR, Role.VIEWER)
   stats(@Query('campaignId') campaignId?: string) {
     return this.smsService.stats(campaignId);
+  }
+
+  @Get('batches')
+  @Roles(Role.ADMIN)
+  listBatches(@Query('campaignId') campaignId?: string) {
+    if (!campaignId) {
+      return [];
+    }
+    return this.smsService.listBatches(campaignId);
+  }
+
+  @Get('batches/:id')
+  @Roles(Role.ADMIN)
+  getBatch(@Param('id') id: string) {
+    return this.smsService.getBatch(id);
+  }
+
+  @Post('batches')
+  @Roles(Role.ADMIN)
+  createBatch(@Body() dto: CreateBatchDto, @Req() req: Request) {
+    const user = (req as any).user;
+    return this.smsService.createBatch(dto.campaignId, dto.type, user?.id);
+  }
+
+  @Patch('batches/:id')
+  @Roles(Role.ADMIN)
+  updateBatch(@Param('id') id: string, @Body() dto: UpdateBatchDto) {
+    return this.smsService.updateBatchStatus(id, dto.status);
+  }
+
+  @Post('batches/:id/process')
+  @Roles(Role.ADMIN)
+  processBatch(@Param('id') id: string, @Query('limit') limit?: string) {
+    const parsed = limit ? Number(limit) : 10;
+    return this.smsService.processBatch(id, Number.isNaN(parsed) ? 10 : parsed);
+  }
+
+  @Post('batches/:id/retry-failed')
+  @Roles(Role.ADMIN)
+  retryFailed(@Param('id') id: string) {
+    return this.smsService.retryFailedBatch(id);
   }
 
   @Post('status-callback')

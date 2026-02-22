@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ClipboardList,
   BarChart3,
@@ -15,34 +16,67 @@ import {
 import { cn } from '../../lib/utils';
 import { Separator } from '../ui/separator';
 
-const navSections = [
-  {
-    title: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
-  },
-  {
-    title: 'Operations',
-    items: [
-      { href: '/orders', label: 'Orders', icon: ShoppingBag },
-      { href: '/dispatch', label: 'Dispatch', icon: Truck },
-      { href: '/customers/search', label: 'Customers', icon: Users },
-    ],
-  },
-  {
-    title: 'Admin',
-    items: [
-      { href: '/admin/users', label: 'Users', icon: Users },
-      { href: '/admin/campaign', label: 'Campaigns', icon: ClipboardList },
-      { href: '/stats', label: 'Stats', icon: BarChart3 },
-      { href: '/admin/locations', label: 'Pickup Locations', icon: MapPin },
-      { href: '/admin/sms', label: 'SMS Templates', icon: MessageSquare },
-      { href: '/admin/audit', label: 'Audit Log', icon: ShieldCheck },
-    ],
-  },
-];
-
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
+  const [currentRole, setCurrentRole] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCurrentRole(parsed?.role || '');
+      }
+    } catch {
+      setCurrentRole('');
+    }
+  }, []);
+
+  const navSections = useMemo(() => {
+    const isEditor = currentRole === 'EDITOR';
+    const isViewer = currentRole === 'VIEWER';
+    return [
+      {
+        title: 'Overview',
+        items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+      },
+      {
+        title: 'Operations',
+        items: [
+          { href: '/orders', label: 'Orders', icon: ShoppingBag },
+          { href: '/dispatch', label: 'Dispatch', icon: Truck },
+          { href: '/customers/search', label: 'Customers', icon: Users },
+          { href: '/admin/locations', label: 'Pickup Locations', icon: MapPin },
+        ].filter((item) => {
+          if (isViewer) {
+            return ['/dispatch'].includes(item.href);
+          }
+          return true;
+        }),
+      },
+      {
+        title: 'Admin',
+        items: [
+          { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/campaign', label: 'Campaigns', icon: ClipboardList },
+          { href: '/stats', label: 'Stats', icon: BarChart3 },
+          { href: '/admin/sms', label: 'SMS Templates', icon: MessageSquare },
+          { href: '/admin/audit', label: 'Audit Log', icon: ShieldCheck },
+        ].filter((item) => {
+          if (isViewer) return false;
+          if (!isEditor) return true;
+          return ![
+            '/admin/users',
+            '/admin/campaign',
+            '/stats',
+            '/admin/sms',
+            '/admin/audit',
+          ].includes(item.href);
+        }),
+      },
+    ].filter((section) => section.items.length > 0);
+  }, [currentRole]);
 
   return (
     <aside className="flex h-full w-full flex-col gap-6 p-4">

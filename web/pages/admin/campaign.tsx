@@ -1,5 +1,5 @@
 ﻿
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -83,6 +83,12 @@ export default function CampaignPage() {
   const [expandedOrdersSortBy, setExpandedOrdersSortBy] = useState<
     'created' | 'updated' | 'name'
   >('updated');
+  const [smsConfirmOpen, setSmsConfirmOpen] = useState(false);
+  const [pendingSmsType, setPendingSmsType] = useState<'ORDER_REMINDER' | 'THANK_YOU' | null>(
+    null
+  );
+  const [smsActionBusy, setSmsActionBusy] = useState(false);
+  const smsProcessingRef = useRef(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [addLocationOpen, setAddLocationOpen] = useState(false);
@@ -217,8 +223,35 @@ export default function CampaignPage() {
   const { data: orders, isLoading: isOrdersLoading } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => (await api.get('/orders')).data,
-    enabled: !!currentCampaign,
+    enabled: isAdmin ? true : !!currentCampaign,
   });
+  const { data: smsTemplates } = useQuery({
+    queryKey: ['sms-templates'],
+    queryFn: async () => (await api.get('/sms/templates')).data,
+    enabled: isAdmin,
+  });
+  const { data: smsBatches } = useQuery({
+    queryKey: ['sms-batches', expandedCampaignId],
+    queryFn: async () =>
+      (await api.get('/sms/batches', { params: { campaignId: expandedCampaignId } })).data,
+    enabled: isAdmin && !!expandedCampaignId,
+  });
+  const smsTemplateMap = useMemo(() => {
+    const map = new Map<string, any>();
+    (smsTemplates || []).forEach((template: any) => {
+      if (template?.name) {
+        map.set(template.name, template);
+      }
+    });
+    return map;
+  }, [smsTemplates]);
+  const smsMessageTypes = useMemo(
+    () => [
+      { type: 'ORDER_REMINDER' as const, label: 'Order Reminder', templateName: 'Order Reminder' },
+      { type: 'THANK_YOU' as const, label: 'Thank You Note', templateName: 'Thank You Note' },
+    ],
+    []
+  );
   const orderCountsByCampaign = useMemo(() => {
     const map = new Map<string, number>();
     (orders || []).forEach((order: any) => {
@@ -429,6 +462,113 @@ export default function CampaignPage() {
   useEffect(() => {
     setExpandedOrdersPage(1);
   }, [expandedCampaignId, expandedOrdersSortBy]);
+
+  const smsBatchByType = useMemo(() => {
+    const map = new Map<string, any>();
+    (smsBatches || []).forEach((batch: any) => {
+      if (batch?.type) map.set(batch.type, batch);
+    });
+    return map;
+  }, [smsBatches]);
+
+  useEffect(() => {
+    if (!isAdmin || !expandedCampaignId) return;
+    const interval = setInterval(async () => {
+      if (smsProcessingRef.current) return;
+      const running = (smsBatches || []).filter(
+        (batch: any) => batch?.status === 'RUNNING' && (batch?.counts?.queued ?? 0) > 0
+      );
+      if (!running.length) return;
+      smsProcessingRef.current = true;
+      try {
+        await Promise.all(
+          running.map((batch: any) =>
+            api.post(`/sms/batches/${batch.id}/process`, undefined, { params: { limit: 10 } })
+          )
+        );
+      } catch {
+        // ignore processing errors; surface via next refresh
+      } finally {
+        smsProcessingRef.current = false;
+        queryClient.invalidateQueries({ queryKey: ['sms-batches', expandedCampaignId] });
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [smsBatches, expandedCampaignId, isAdmin, queryClient]);
+
+  const startSmsBatch = async (type: 'ORDER_REMINDER' | 'THANK_YOU') => {
+    if (!expandedCampaignId) return;
+    setSmsActionBusy(true);
+    try {
+      const res = await api.post('/sms/batches', { campaignId: expandedCampaignId, type });
+      const batchId = res?.data?.id;
+      if (batchId) {
+        await api.post(`/sms/batches/${batchId}/process`, undefined, { params: { limit: 10 } });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['sms-batches', expandedCampaignId] });
+      toast({ title: 'SMS sending started' });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to start SMS',
+        description: err?.response?.data?.message || 'Unable to start SMS sending.',
+      });
+    } finally {
+      setSmsActionBusy(false);
+    }
+  };
+
+  const pauseSmsBatch = async (batchId: string) => {
+    setSmsActionBusy(true);
+    try {
+      await api.patch(`/sms/batches/${batchId}`, { status: 'PAUSED' });
+      await queryClient.invalidateQueries({ queryKey: ['sms-batches', expandedCampaignId] });
+      toast({ title: 'SMS sending paused' });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to pause',
+        description: err?.response?.data?.message || 'Unable to pause SMS sending.',
+      });
+    } finally {
+      setSmsActionBusy(false);
+    }
+  };
+
+  const resumeSmsBatch = async (batchId: string) => {
+    setSmsActionBusy(true);
+    try {
+      await api.patch(`/sms/batches/${batchId}`, { status: 'RUNNING' });
+      await api.post(`/sms/batches/${batchId}/process`, undefined, { params: { limit: 10 } });
+      await queryClient.invalidateQueries({ queryKey: ['sms-batches', expandedCampaignId] });
+      toast({ title: 'SMS sending resumed' });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to resume',
+        description: err?.response?.data?.message || 'Unable to resume SMS sending.',
+      });
+    } finally {
+      setSmsActionBusy(false);
+    }
+  };
+
+  const retryFailedSmsBatch = async (batchId: string) => {
+    setSmsActionBusy(true);
+    try {
+      await api.post(`/sms/batches/${batchId}/retry-failed`);
+      await queryClient.invalidateQueries({ queryKey: ['sms-batches', expandedCampaignId] });
+      toast({ title: 'Retrying failed SMS' });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to retry',
+        description: err?.response?.data?.message || 'Unable to retry failed SMS.',
+      });
+    } finally {
+      setSmsActionBusy(false);
+    }
+  };
 
 
   const updateState = async (id: string, state: string) => {
@@ -1002,6 +1142,123 @@ export default function CampaignPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {isAdmin && (
+              <div className="space-y-3">
+                <div className="text-sm font-medium">Campaign SMS</div>
+                <div className="rounded-md border p-4">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {smsMessageTypes.map((item) => {
+                      const batch = smsBatchByType.get(item.type);
+                      const counts = batch?.counts || {
+                        queued: 0,
+                        sent: 0,
+                        delivered: 0,
+                        failed: 0,
+                        total: 0,
+                      };
+                      const progress = batch?.progress || { completed: 0, total: 0, percent: 0 };
+                      const hasBatch = !!batch;
+                      const statusLabel = !hasBatch
+                        ? 'Not started'
+                        : batch.status === 'PAUSED'
+                        ? 'Paused'
+                        : batch.status === 'RUNNING'
+                        ? 'Running'
+                        : counts.failed > 0
+                        ? 'Completed (With Failures)'
+                        : 'Completed (Success)';
+                      const templateBody = smsTemplateMap.get(item.templateName)?.body || '';
+                      const hasTemplate = !!templateBody;
+                      const canSend = isAdmin && !hasBatch && !smsActionBusy && hasTemplate;
+                      return (
+                        <div
+                          key={item.type}
+                          className="flex h-full flex-col justify-between gap-3 rounded-md border bg-muted/10 p-4"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-sm font-semibold">{item.label}</div>
+                              <Badge variant="outline">{statusLabel}</Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {templateBody ? templateBody : 'Template not configured.'}
+                            </div>
+                            {hasBatch && (
+                              <div className="space-y-2 pt-2">
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>
+                                    Progress: {progress.completed}/{progress.total || 0}
+                                  </span>
+                                  <span>{progress.percent}%</span>
+                                </div>
+                                <div className="h-2 w-full rounded-full bg-muted">
+                                  <div
+                                    className="h-2 rounded-full bg-emerald-500"
+                                    style={{ width: `${progress.percent}%` }}
+                                  />
+                                </div>
+                                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                  <span>Queued: {counts.queued}</span>
+                                  <span>Sent: {counts.sent}</span>
+                                  <span>Delivered: {counts.delivered}</span>
+                                  <span>Failed: {counts.failed}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {!hasBatch ? (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setPendingSmsType(item.type);
+                                  setSmsConfirmOpen(true);
+                                }}
+                                disabled={!canSend}
+                              >
+                                Send
+                              </Button>
+                            ) : batch.status === 'RUNNING' ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => pauseSmsBatch(batch.id)}
+                                disabled={smsActionBusy}
+                              >
+                                Pause
+                              </Button>
+                            ) : batch.status === 'PAUSED' ? (
+                              <Button
+                                size="sm"
+                                onClick={() => resumeSmsBatch(batch.id)}
+                                disabled={smsActionBusy}
+                              >
+                                Continue
+                              </Button>
+                            ) : null}
+                            {hasBatch && counts.failed > 0 && batch.status !== 'RUNNING' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => retryFailedSmsBatch(batch.id)}
+                                disabled={smsActionBusy}
+                              >
+                                Retry Failed
+                              </Button>
+                            )}
+                            {hasBatch && counts.total === 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                No eligible orders to send.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
             {(() => {
               const campaign = (campaignList || []).find((c: any) => c.id === expandedCampaignId);
               if (!campaign) return null;
@@ -1211,6 +1468,41 @@ export default function CampaignPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={smsConfirmOpen}
+        onOpenChange={(open) => {
+          setSmsConfirmOpen(open);
+          if (!open) setPendingSmsType(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send campaign SMS?</DialogTitle>
+            <DialogDescription>
+              This will start sending the selected message to all eligible orders in this
+              campaign. This action can be paused or resumed, but the campaign message can only be
+              sent once per campaign.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => {
+                if (!pendingSmsType) return;
+                setSmsConfirmOpen(false);
+                startSmsBatch(pendingSmsType);
+                setPendingSmsType(null);
+              }}
+              disabled={!pendingSmsType || smsActionBusy}
+            >
+              Confirm & Send
+            </Button>
+            <Button variant="secondary" onClick={() => setSmsConfirmOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={campaignModalOpen}

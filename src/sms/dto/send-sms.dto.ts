@@ -1,6 +1,7 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { normalizeAuMobile } from '../../common/utils/phone';
+import { SmsMessageType } from '@prisma/client';
 
 export class SendSmsDto {
   @IsString()
@@ -23,4 +24,12 @@ export class SendSmsDto {
   @IsOptional()
   @IsString()
   customerId?: string;
+
+  @IsOptional()
+  @IsEnum(SmsMessageType)
+  type?: SmsMessageType;
+
+  @IsOptional()
+  @IsString()
+  batchId?: string;
 }

@@ -6,45 +6,40 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
-import { normalizeAuMobile } from '../lib/phone';
 
 export default function OtpPage() {
-  const [mobile, setMobile] = useState('');
   const [code, setCode] = useState('');
-  const [token, setToken] = useState('');
-  const [sessionId, setSessionId] = useState('');
+  const [otpToken, setOtpToken] = useState('');
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (router.query.mobile && typeof router.query.mobile === 'string') {
-      setMobile(normalizeAuMobile(router.query.mobile));
-    }
-  }, [router.query.mobile]);
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('otpToken');
+    if (stored) setOtpToken(stored);
+  }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const normalizedMobile = normalizeAuMobile(mobile);
-      setMobile(normalizedMobile);
-      const res = await api.post('/auth/verify', { mobile: normalizedMobile, code });
-      const { token: jwt, redirect, sessionId: newSessionId, user } = res.data;
-      setToken(jwt);
-      if (jwt) {
-        localStorage.setItem('token', jwt);
+      if (!otpToken) {
+        throw new Error('Missing OTP token. Please log in again.');
       }
-      if (newSessionId) {
-        setSessionId(newSessionId);
-        localStorage.setItem('sessionId', newSessionId);
+      const res = await api.post('/auth/verify-otp', { otpToken, code });
+      const { accessToken, redirect, user, mustChangePassword } = res.data;
+      if (accessToken) {
+        localStorage.setItem('token', accessToken);
       }
       if (user) {
         localStorage.setItem('user', JSON.stringify(user));
       }
-      if (redirect) {
-        router.push(redirect);
-      } else {
-        router.push('/dashboard');
+      localStorage.removeItem('otpToken');
+      localStorage.removeItem('otpMobile');
+      if (mustChangePassword) {
+        router.push('/change-password');
+        return;
       }
+      router.push(redirect || '/dashboard');
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -64,15 +59,6 @@ export default function OtpPage() {
         <CardContent>
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="otp-mobile">Mobile</Label>
-              <Input
-                id="otp-mobile"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder="0400000000"
-              />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="otp-code">OTP Code</Label>
               <Input
                 id="otp-code"
@@ -84,10 +70,9 @@ export default function OtpPage() {
             <Button className="w-full" type="submit">
               Verify
             </Button>
-            {(token || sessionId) && (
+            {!otpToken && (
               <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-                {token && <div className="break-words">JWT: {token}</div>}
-                {sessionId && <div className="break-words">Session: {sessionId}</div>}
+                Missing OTP token. Please return to login.
               </div>
             )}
           </form>

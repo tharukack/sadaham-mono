@@ -11,6 +11,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { Toggle } from '../../components/ui/toggle';
 import { useToast } from '../../components/ui/use-toast';
 import { Pencil } from 'lucide-react';
 import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
@@ -41,7 +42,6 @@ export default function UsersPage() {
     email: '',
     address: '',
     role: 'VIEWER',
-    password: '',
     isActive: true,
     mainCollectorId: '',
   });
@@ -180,7 +180,6 @@ export default function UsersPage() {
       email: editingUser.email || "",
       address: editingUser.address || "",
       role: editingUser.role || "VIEWER",
-      password: "",
       isActive: editingUser.isActive ?? true,
       mainCollectorId:
         editingUser.mainCollectorId && editingUser.mainCollectorId !== editingUser.id
@@ -215,7 +214,6 @@ export default function UsersPage() {
       email: '',
       address: '',
       role: 'VIEWER',
-      password: '',
       isActive: true,
       mainCollectorId: '',
     });
@@ -249,21 +247,58 @@ export default function UsersPage() {
           email: form.email || undefined,
           address: form.address || undefined,
           role: form.role,
-          password: form.password,
+          isActive: form.isActive,
         };
         if (form.mainCollectorId) {
           payload.mainCollectorId = form.mainCollectorId;
         }
-        await api.post('/users', payload);
+        const res = await api.post('/users', payload);
+        const tempPassword = res?.data?.tempPassword;
+        const hasTempPassword = Boolean(tempPassword);
+        if (tempPassword) {
+          toast({
+            title: 'User created',
+            description: `Temporary password: ${tempPassword}`,
+          });
+        }
+        if (!hasTempPassword) {
+          toast({ title: 'User created' });
+        }
       }
       await queryClient.invalidateQueries({ queryKey: ['users'] });
       resetForm();
-      toast({ title: editingUserId ? 'User updated' : 'User created' });
+      if (editingUserId) {
+        toast({ title: 'User updated' });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
         title: 'Save failed',
         description: err?.response?.data?.message || 'Unable to save user.',
+      });
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const resetPassword = async () => {
+    if (!editingUserId || !isAdmin) return;
+    setFormLoading(true);
+    try {
+      const res = await api.post(`/users/${editingUserId}/reset-password`);
+      const tempPassword = res?.data?.tempPassword;
+      toast({
+        title: 'Password reset',
+        description: tempPassword
+          ? `Temporary password: ${tempPassword}`
+          : 'A temporary password was sent via SMS.',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['users'] });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Reset failed',
+        description: err?.response?.data?.message || 'Unable to reset password.',
       });
     } finally {
       setFormLoading(false);
@@ -357,7 +392,9 @@ export default function UsersPage() {
                           {user.isActive ? (
                             <Badge variant="outline">Active</Badge>
                           ) : (
-                            <Badge variant="secondary">Inactive</Badge>
+                            <Badge className="border-rose-200 bg-rose-50 text-rose-700" variant="outline">
+                              Inactive
+                            </Badge>
                           )}
                         </TableCell>
                         <TableCell>
@@ -547,39 +584,19 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {editingUserId ? (
-                <div className="space-y-2">
-                  <Label>Active</Label>
-                  <Select
-                    value={form.isActive ? 'true' : 'false'}
-                    onValueChange={(value) =>
-                      setForm({ ...form, isActive: value === 'true' })
-                    }
+              <div className="space-y-2">
+                <Label>Active</Label>
+                <div className="flex items-center gap-3">
+                  <Toggle
+                    checked={form.isActive}
+                    onCheckedChange={(value) => setForm({ ...form, isActive: value })}
                     disabled={!isAdmin}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">Active</SelectItem>
-                      <SelectItem value="false">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="user-password">Password</Label>
-                  <Input
-                    id="user-password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    disabled={!isAdmin}
-                    type="password"
-                    minLength={6}
-                    required
                   />
+                  <span className="text-sm text-muted-foreground">
+                    {form.isActive ? 'Active' : 'Inactive'}
+                  </span>
                 </div>
-              )}
+              </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="user-collector">Main Collector</Label>
                 <Input
@@ -626,6 +643,11 @@ export default function UsersPage() {
                 <p className="text-xs text-muted-foreground">
                   Leave empty to default to the user itself.
                 </p>
+                {!editingUserId && (
+                  <p className="text-xs text-muted-foreground">
+                    A temporary password will be generated and sent via SMS.
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Selected: {selectedCollector ? formatUserLabel(selectedCollector) : 'Self (default)'}
                 </p>
@@ -638,6 +660,16 @@ export default function UsersPage() {
               >
                 {formLoading ? 'Saving...' : 'Save'}
               </Button>
+              {editingUserId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetPassword}
+                  disabled={!isAdmin || formLoading}
+                >
+                  Reset Password
+                </Button>
+              )}
               <Button variant="secondary" type="button" onClick={resetForm}>
                 Cancel
               </Button>

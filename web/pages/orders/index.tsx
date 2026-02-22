@@ -286,9 +286,13 @@ export default function OrdersPage() {
                 </div>
               )}
             </div>
-            <Button asChild disabled={!canCreateOrders}>
-              <Link href="/dashboard?addOrder=1">Add Order</Link>
-            </Button>
+            {canCreateOrders ? (
+              <Button asChild>
+                <Link href="/dashboard?addOrder=1">Add Order</Link>
+              </Button>
+            ) : (
+              <Button disabled>Add Order</Button>
+            )}
           </div>
           <div className="flex items-center gap-2 pt-3">
             <Input

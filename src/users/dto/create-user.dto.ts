@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsMobilePhone, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsMobilePhone, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Role } from '@prisma/client';
 import { normalizeAuMobile } from '../../common/utils/phone';
@@ -25,8 +25,9 @@ export class CreateUserDto {
   @IsEnum(Role)
   role!: Role;
 
-  @MinLength(6)
-  password!: string;
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 
   @IsOptional()
   @IsUUID()

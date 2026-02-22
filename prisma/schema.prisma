@@ -29,6 +29,19 @@ enum SmsStatus {
   FAILED
 }
 
+enum SmsMessageType {
+  ORDER_CONFIRMATION
+  ORDER_MODIFIED
+  ORDER_REMINDER
+  THANK_YOU
+}
+
+enum SmsBatchStatus {
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
 model User {
   id             String         @id @default(uuid())
   mobile         String         @unique
@@ -38,6 +51,7 @@ model User {
   address        String?
   role           Role
   passwordHash   String
+  mustChangePassword Boolean @default(false)
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -50,6 +64,7 @@ model User {
   updatedCustomers Customer[]   @relation("CustomerUpdatedBy")
   createdOrders  Order[]        @relation("OrderCreatedBy")
   updatedOrders  Order[]        @relation("OrderUpdatedBy")
+  smsBatchesCreated SmsBatch[]  @relation("SmsBatchCreatedBy")
 }
 
 model UserSession {
@@ -103,6 +118,7 @@ model Campaign {
   eggCost     Float        @default(0)
   otherCost   Float        @default(0)
   orders    Order[]
+  smsBatches SmsBatch[]
 }
 
 model PickupLocation {
@@ -159,14 +175,34 @@ model SmsMessage {
   campaignId        String?
   orderId           String?
   customerId        String?
+  batchId           String?
+  batch             SmsBatch? @relation(fields: [batchId], references: [id])
   toMobile          String
   body              String
   status            SmsStatus @default(QUEUED)
+  type              SmsMessageType?
   attemptCount      Int       @default(0)
   lastError         String?
   providerMessageId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model SmsBatch {
+  id          String         @id @default(uuid())
+  campaignId  String
+  campaign    Campaign       @relation(fields: [campaignId], references: [id])
+  type        SmsMessageType
+  status      SmsBatchStatus @default(RUNNING)
+  createdById String?
+  createdBy   User?          @relation("SmsBatchCreatedBy", fields: [createdById], references: [id])
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  messages    SmsMessage[]
+
+  @@unique([campaignId, type])
 }
 
 model AuditLog {
