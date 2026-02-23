@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const defaultApiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const defaultApiUrl = `http://${defaultApiHost}:4000`;
+
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || defaultApiUrl,
 });
 
 // Attach bearer token from localStorage on browser requests

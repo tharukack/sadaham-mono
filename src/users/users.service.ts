@@ -27,7 +27,7 @@ export class UsersService {
   }
 
   private generateTempPassword() {
-    return randomBytes(12).toString('base64url').slice(0, 16);
+    return randomBytes(6).toString('base64url').slice(0, 8);
   }
 
   async create(dto: CreateUserDto, actorUserId: string) {

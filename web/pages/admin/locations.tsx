@@ -8,6 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../components/ui/use-toast';
 import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
@@ -26,6 +33,11 @@ export default function LocationsPage() {
   const [distributorLabel, setDistributorLabel] = useState('');
   const [transporterSearch, setTransporterSearch] = useState('');
   const [transporterLabel, setTransporterLabel] = useState('');
+  const [locationsSortBy, setLocationsSortBy] = useState<'created' | 'updated' | 'name'>(
+    'updated'
+  );
+  const [locationsPage, setLocationsPage] = useState(1);
+  const [locationsRowsPerPage, setLocationsRowsPerPage] = useState(10);
   const { toast } = useToast();
 
   const isAdmin = currentRole === 'ADMIN';
@@ -57,6 +69,29 @@ export default function LocationsPage() {
   }, []);
 
   const locations = useMemo(() => (data || []) as any[], [data]);
+  const sortedLocations = useMemo(() => {
+    const next = [...locations];
+    next.sort((a: any, b: any) => {
+      if (locationsSortBy === 'name') {
+        return `${a.name || ''}`.localeCompare(`${b.name || ''}`);
+      }
+      const aDate = new Date(
+        locationsSortBy === 'created' ? a.createdAt || 0 : a.updatedAt || 0,
+      ).getTime();
+      const bDate = new Date(
+        locationsSortBy === 'created' ? b.createdAt || 0 : b.updatedAt || 0,
+      ).getTime();
+      return bDate - aDate;
+    });
+    return next;
+  }, [locations, locationsSortBy]);
+  const locationsPageCount = useMemo(() => {
+    return Math.max(1, Math.ceil(sortedLocations.length / locationsRowsPerPage));
+  }, [sortedLocations.length, locationsRowsPerPage]);
+  const pagedLocations = useMemo(() => {
+    const start = (locationsPage - 1) * locationsRowsPerPage;
+    return sortedLocations.slice(start, start + locationsRowsPerPage);
+  }, [sortedLocations, locationsPage, locationsRowsPerPage]);
   const editingLocation = useMemo(
     () => locations.find((loc) => loc.id === editingId),
     [locations, editingId]
@@ -116,6 +151,14 @@ export default function LocationsPage() {
       setTransporterLabel('');
     }
   }, [editingLocation]);
+
+  useEffect(() => {
+    setLocationsPage(1);
+  }, [locationsSortBy, locationsRowsPerPage]);
+
+  useEffect(() => {
+    setLocationsPage((prev) => Math.min(Math.max(prev, 1), locationsPageCount));
+  }, [locationsPageCount]);
 
   const resetForm = () => {
     setForm({
@@ -206,21 +249,7 @@ export default function LocationsPage() {
 
   return (
     <AppShell title="Pickup Locations">
-      <PageHeader
-        title="Pickup Locations"
-        description="Review pickup points and distributor assignments."
-        actions={
-          <Button
-            disabled={!isAdmin}
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-          >
-            Add Location
-          </Button>
-        }
-      />
+      <PageHeader title="Pickup Locations" description="Review pickup points and distributor assignments." />
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -428,8 +457,17 @@ export default function LocationsPage() {
         </DialogContent>
       </Dialog>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle>Locations</CardTitle>
+          <Button
+            disabled={!isAdmin}
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+          >
+            Add Location
+          </Button>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -441,82 +479,161 @@ export default function LocationsPage() {
               No pickup locations available.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Distributor</TableHead>
-                  <TableHead>Transporter</TableHead>
-                  <TableHead>Delivery Time (Min)</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Dispatch Time</TableHead>
-                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {locations.map((loc: any) => (
-                  <TableRow key={loc.id}>
-                    <TableCell className="font-medium">{loc.name}</TableCell>
-                    <TableCell>{loc.address}</TableCell>
-                    <TableCell>
-                      {loc.distributorCustomer ? (
-                        <>
-                          <div className="text-sm font-medium">
-                            {`${loc.distributorCustomer.firstName} ${loc.distributorCustomer.lastName}`.trim()}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatAuMobile(loc.distributorCustomer.mobile || '-') || '-'}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-sm font-medium">{loc.distributorName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatAuMobile(loc.distributorMobile || '') || '-'}
-                          </div>
-                        </>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {loc.transporterCustomer ? (
-                        <>
-                          <div className="text-sm font-medium">
-                            {`${loc.transporterCustomer.firstName} ${loc.transporterCustomer.lastName}`.trim()}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatAuMobile(loc.transporterCustomer.mobile || '-') || '-'}
-                          </div>
-                        </>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {typeof loc.deliveryTimeMinutes === 'number' ? loc.deliveryTimeMinutes : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {typeof loc.distributionPriority === 'number' ? loc.distributionPriority : '-'}
-                    </TableCell>
-                    <TableCell>{formatDispatchTime(loc.timeOfDispatch)}</TableCell>
-                    {isAdmin && (
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            setEditingId(loc.id);
-                            setShowForm(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                      </TableCell>
-                    )}
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Distributor</TableHead>
+                    <TableHead>Transporter</TableHead>
+                    <TableHead>Delivery Time (Min)</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Dispatch Time</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedLocations.map((loc: any) => (
+                    <TableRow key={loc.id}>
+                      <TableCell className="font-medium">{loc.name}</TableCell>
+                      <TableCell>{loc.address}</TableCell>
+                      <TableCell>
+                        {loc.distributorCustomer ? (
+                          <>
+                            <div className="text-sm font-medium">
+                              {`${loc.distributorCustomer.firstName} ${loc.distributorCustomer.lastName}`.trim()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatAuMobile(loc.distributorCustomer.mobile || '-') || '-'}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-sm font-medium">{loc.distributorName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatAuMobile(loc.distributorMobile || '') || '-'}
+                            </div>
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {loc.transporterCustomer ? (
+                          <>
+                            <div className="text-sm font-medium">
+                              {`${loc.transporterCustomer.firstName} ${loc.transporterCustomer.lastName}`.trim()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatAuMobile(loc.transporterCustomer.mobile || '-') || '-'}
+                            </div>
+                          </>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {typeof loc.deliveryTimeMinutes === 'number'
+                          ? loc.deliveryTimeMinutes
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {typeof loc.distributionPriority === 'number'
+                          ? loc.distributionPriority
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{formatDispatchTime(loc.timeOfDispatch)}</TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setEditingId(loc.id);
+                              setShowForm(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <span>Sort by</span>
+                    <Select
+                      value={locationsSortBy}
+                      onValueChange={(value) =>
+                        setLocationsSortBy(value as 'created' | 'updated' | 'name')
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[170px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        <SelectItem value="updated">Date modified</SelectItem>
+                        <SelectItem value="created">Date created</SelectItem>
+                        <SelectItem value="name">Name</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>Rows per page</span>
+                    <Select
+                      value={String(locationsRowsPerPage)}
+                      onValueChange={(value) => {
+                        const parsed = Number(value);
+                        setLocationsRowsPerPage(parsed);
+                        setLocationsPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[90px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span>
+                    {sortedLocations.length === 0
+                      ? '0 of 0'
+                      : `${(locationsPage - 1) * locationsRowsPerPage + 1}-${Math.min(
+                          locationsPage * locationsRowsPerPage,
+                          sortedLocations.length,
+                        )} of ${sortedLocations.length}`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLocationsPage((prev) => Math.max(1, prev - 1))}
+                      disabled={locationsPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setLocationsPage((prev) => Math.min(locationsPageCount, prev + 1))
+                      }
+                      disabled={locationsPage >= locationsPageCount}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
