@@ -864,127 +864,131 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="w-full overflow-x-auto">
-                    <Table className="min-w-[1100px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
-                    <TableHeader>
-                      <TableRow className="whitespace-nowrap">
-                        <TableHead className="sticky left-0 z-10 bg-background">
-                          Customer
-                        </TableHead>
-                        <TableHead>Pickup Location</TableHead>
-                        <TableHead>Pickup By</TableHead>
-                        <TableHead>Meal Packets</TableHead>
-                        <TableHead className="text-right">Total Cost</TableHead>
-                        <TableHead>Note</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pagedOrders.map((order: any) => {
-                        const mealDetails = getMealDetails(order);
-                        const isDeleted = !!order.deletedAt;
-                        return (
-                          <TableRow key={order.id} className="whitespace-nowrap">
-                            <TableCell className="sticky left-0 z-10 bg-background font-medium">
-                              <button
-                                type="button"
-                                className="text-left text-foreground underline-offset-4 hover:underline"
-                                onClick={() => setDetailOrder(order)}
-                              >
-                                {order.customer?.firstName} {order.customer?.lastName}
-                              </button>
-                            </TableCell>
-                            <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
-                            <TableCell>
-                              {order.pickupByCustomer
-                                ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
-                                : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-sm font-medium">
-                                  Total: {mealDetails.total}
-                                </span>
-                                {mealDetails.meals.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">No meals</span>
-                                ) : (
-                                  mealDetails.meals.map((meal) => (
-                                    <Badge key={meal.label} variant="secondary">
-                                      {meal.label} {meal.qty}
-                                    </Badge>
-                                  ))
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {getOrderCost(order).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
-                              {order.note ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="cursor-help">{order.note}</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{order.note}</TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                '-'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {isDeleted ? (
-                                <Badge variant="destructive">Deleted</Badge>
-                              ) : (
-                                <Badge variant="outline">Active</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {isDeleted ? (
-                                canEditOrders ? (
-                                  <Button
-                                    size="icon"
-                                    variant="secondary"
-                                    className="h-7 w-7"
-                                    onClick={() => restoreOrder(order.id)}
-                                    aria-label="Restore order"
-                                  >
-                                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                                  </Button>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">Deleted</span>
-                                )
-                              ) : canEditOrders ? (
-                                <div className="flex justify-end gap-1">
-                                  <Button
-                                    size="icon"
-                                    variant="secondary"
-                                    className="h-7 w-7"
-                                    onClick={() => startEdit(order)}
-                                    aria-label="Edit order"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="destructive"
-                                    className="h-7 w-7"
-                                    onClick={() => deleteOrder(order.id)}
-                                    disabled={!canDeleteOrders}
-                                    aria-label="Delete order"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">No access</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                    <div className="rounded-md border">
+                      <Table className="w-full min-w-[900px] sm:min-w-[1100px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
+                          <TableHeader>
+                            <TableRow className="whitespace-nowrap">
+                              <TableHead className="sticky left-0 z-10 bg-background">
+                                Customer
+                              </TableHead>
+                              <TableHead>Pickup Location</TableHead>
+                              <TableHead>Pickup By</TableHead>
+                              <TableHead>Meal Packets</TableHead>
+                              <TableHead className="text-right">Total Cost</TableHead>
+                              <TableHead>Note</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {pagedOrders.map((order: any) => {
+                              const mealDetails = getMealDetails(order);
+                              const isDeleted = !!order.deletedAt;
+                              return (
+                                <TableRow key={order.id} className="whitespace-nowrap">
+                                  <TableCell className="sticky left-0 z-10 bg-background font-medium">
+                                    <button
+                                      type="button"
+                                      className="text-left text-foreground underline-offset-4 hover:underline"
+                                      onClick={() => setDetailOrder(order)}
+                                    >
+                                      {order.customer?.firstName} {order.customer?.lastName}
+                                    </button>
+                                  </TableCell>
+                                  <TableCell>
+                                    {order.pickupLocation?.name || 'Unassigned'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {order.pickupByCustomer
+                                      ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
+                                      : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                      <span className="text-sm font-medium">
+                                        Total: {mealDetails.total}
+                                      </span>
+                                      {mealDetails.meals.length === 0 ? (
+                                        <span className="text-xs text-muted-foreground">
+                                          No meals
+                                        </span>
+                                      ) : (
+                                        mealDetails.meals.map((meal) => (
+                                          <Badge key={meal.label} variant="secondary">
+                                            {meal.label} {meal.qty}
+                                          </Badge>
+                                        ))
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {getOrderCost(order).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
+                                    {order.note ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="cursor-help">{order.note}</span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{order.note}</TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      '-'
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {isDeleted ? (
+                                      <Badge variant="destructive">Deleted</Badge>
+                                    ) : (
+                                      <Badge variant="outline">Active</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {isDeleted ? (
+                                      canEditOrders ? (
+                                        <Button
+                                          size="icon"
+                                          variant="secondary"
+                                          className="h-7 w-7"
+                                          onClick={() => restoreOrder(order.id)}
+                                          aria-label="Restore order"
+                                        >
+                                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </Button>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground">Deleted</span>
+                                      )
+                                    ) : canEditOrders ? (
+                                      <div className="flex justify-end gap-1">
+                                        <Button
+                                          size="icon"
+                                          variant="secondary"
+                                          className="h-7 w-7"
+                                          onClick={() => startEdit(order)}
+                                          aria-label="Edit order"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="destructive"
+                                          className="h-7 w-7"
+                                          onClick={() => deleteOrder(order.id)}
+                                          disabled={!canDeleteOrders}
+                                          aria-label="Delete order"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">No access</span>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                      </Table>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -1124,7 +1128,8 @@ export default function Dashboard() {
                 <CardTitle>Meal Totals</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
+                <div className="w-full overflow-x-auto">
+                  <Table className="min-w-[360px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Meal Type</TableHead>
@@ -1139,7 +1144,8 @@ export default function Dashboard() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
             <Card>
@@ -1147,7 +1153,8 @@ export default function Dashboard() {
                 <CardTitle>SMS Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
+                <div className="w-full overflow-x-auto">
+                  <Table className="min-w-[360px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Status</TableHead>
@@ -1162,7 +1169,8 @@ export default function Dashboard() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

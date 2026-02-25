@@ -157,7 +157,7 @@ export function OrderDetailsModal({
 
   const retrySms = async (messageId: string) => {
     if (!messageId) return;
-    setRetryingIds((prev) => new Set([...prev, messageId]));
+    setRetryingIds((prev) => new Set(Array.from(prev).concat(messageId)));
     setSmsLocal((prev) =>
       prev.map((msg) =>
         msg.id === messageId ? { ...msg, status: 'QUEUED', updatedAt: new Date().toISOString() } : msg
@@ -196,10 +196,10 @@ export function OrderDetailsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1100px] max-h-[85vh] overflow-hidden p-0 [&>button]:hidden">
-        <div className="flex max-h-[85vh] flex-col">
+      <DialogContent className="h-[80vh] w-[80vw] max-w-[80vw] max-h-[80vh] overflow-hidden p-0 sm:w-[75vw] sm:max-w-4xl md:w-[70vw] md:max-w-4xl lg:w-[60vw] lg:max-w-5xl [&>button]:hidden">
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="sticky top-0 z-10 border-b bg-background">
-            <div className="flex items-center justify-between px-4 pt-4 sm:px-6 sm:pt-5">
+            <div className="flex items-center justify-between px-3 pt-0 sm:px-4">
               <DialogTitle className="text-lg">Order Details</DialogTitle>
               <Button
                 type="button"
@@ -211,9 +211,9 @@ export function OrderDetailsModal({
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
-            <div className="px-4 pb-4 sm:px-6">
+            <div className="px-3 pb-3 sm:px-4">
               <Card className="shadow-sm">
-                <CardContent className="grid gap-3 p-4 md:grid-cols-[1.4fr_1fr]">
+                <CardContent className="grid gap-2 p-3 md:grid-cols-[1.4fr_1fr]">
                   <div>
                     <div className="text-xs uppercase text-muted-foreground">Customer</div>
                     <div className="text-lg font-semibold">{customerName || 'Customer'}</div>
@@ -231,8 +231,8 @@ export function OrderDetailsModal({
                 </CardContent>
               </Card>
             </div>
-            <div className="px-4 pb-4 sm:px-6">
-              <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+            <div className="px-3 pb-3 sm:px-4">
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">Entered By</Badge>
                   <span className="text-foreground">{createdByName}</span>
@@ -251,8 +251,8 @@ export function OrderDetailsModal({
                 </div>
               </div>
             </div>
-            <div className="px-4 pb-4 sm:px-6">
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-4 py-2 text-sm">
+            <div className="px-3 pb-3 sm:px-4">
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
                 <span className="text-xs font-semibold uppercase text-muted-foreground">
                   Total Orders
                 </span>
@@ -269,31 +269,31 @@ export function OrderDetailsModal({
               </div>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4 sm:px-6">
-            <div className="grid gap-4 md:grid-cols-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-3 sm:px-4">
+            <div className="grid gap-3 md:grid-cols-2">
               <Card className="shadow-sm">
-                <CardContent className="p-4 text-sm">
+                <CardContent className="p-3 text-sm">
                   <div className="mb-3 border-b pb-2 text-sm font-semibold uppercase text-muted-foreground">
                     Order Summary
                   </div>
                   <div className="grid gap-2 text-sm">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Campaign</span>
                       <span className="text-right font-medium">{campaignName}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Campaign State</span>
                       <span className="text-right font-medium">{campaignState}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Total Cost</span>
                       <span className="text-right font-semibold">${totalCost.toFixed(2)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Order Entered User</span>
                       <span className="text-right font-medium">{createdByName}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Main Collector</span>
                       <span className="text-right font-medium">{mainCollectorLabel}</span>
                     </div>
@@ -301,14 +301,14 @@ export function OrderDetailsModal({
                 </CardContent>
               </Card>
               <Card className="shadow-sm">
-                <CardContent className="p-4 text-sm">
+                <CardContent className="p-3 text-sm">
                   <div className="mb-3 flex items-center justify-between border-b pb-2">
                     <div className="text-sm font-semibold uppercase text-muted-foreground">
                       SMS Campaign
                     </div>
                     <Badge variant="outline">{smsStatus}</Badge>
                   </div>
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {smsRows.map((row: any) => {
                             const config = statusConfig[row.status];
                             const timestampLabel = row.timestamp
@@ -351,22 +351,22 @@ export function OrderDetailsModal({
                 </CardContent>
               </Card>
               <Card className="shadow-sm">
-                <CardContent className="p-4 text-sm">
+                <CardContent className="p-3 text-sm">
                   <div className="mb-3 border-b pb-2 text-sm font-semibold uppercase text-muted-foreground">
                     Pickup Details
                   </div>
                   <div className="grid gap-2 text-sm">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Pickup Location</span>
                       <span className="text-right font-medium">
                         {order.pickupLocation?.name || 'Unassigned'}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Pickup By</span>
                       <span className="text-right font-medium">{pickupByName || '-'}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Address</span>
                       <span className="text-right font-medium">
                         {order.pickupLocation?.address || '-'}
@@ -376,7 +376,7 @@ export function OrderDetailsModal({
                 </CardContent>
               </Card>
               <Card className="shadow-sm">
-                <CardContent className="p-4 text-sm">
+                <CardContent className="p-3 text-sm">
                   <div className="mb-3 border-b pb-2 text-sm font-semibold uppercase text-muted-foreground">
                     Notes
                   </div>

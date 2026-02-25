@@ -16,10 +16,12 @@ export function AppShell({ title, children, className }: AppShellProps) {
       <div className="hidden w-64 border-r bg-background lg:flex">
         <Sidebar />
       </div>
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Topbar title={title} />
         <main className={cn('flex-1 min-w-0 p-4 sm:p-6', className)}>
-          <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">{children}</div>
+          <div className="mx-auto w-full max-w-[1400px] space-y-4 sm:space-y-6 2xl:max-w-[1600px]">
+            {children}
+          </div>
         </main>
       </div>
     </div>

@@ -24,27 +24,30 @@ export function PickupLocationsTable({ rows, totalOrders }: PickupLocationsTable
             No pickup locations yet.
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Location</TableHead>
-                <TableHead>Orders</TableHead>
-                <TableHead>% of total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => {
-                const percent = totalOrders > 0 ? Math.round((row.orders / totalOrders) * 100) : 0;
-                return (
-                  <TableRow key={row.locationId}>
-                    <TableCell className="font-medium">{row.locationName}</TableCell>
-                    <TableCell>{row.orders}</TableCell>
-                    <TableCell>{percent}%</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[420px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Orders</TableHead>
+                  <TableHead>% of total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const percent =
+                    totalOrders > 0 ? Math.round((row.orders / totalOrders) * 100) : 0;
+                  return (
+                    <TableRow key={row.locationId}>
+                      <TableCell className="font-medium">{row.locationName}</TableCell>
+                      <TableCell>{row.orders}</TableCell>
+                      <TableCell>{percent}%</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>

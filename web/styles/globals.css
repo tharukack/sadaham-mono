@@ -52,8 +52,9 @@
     @apply border-border;
   }
 
+  html,
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
     font-family: "Geist", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
 }

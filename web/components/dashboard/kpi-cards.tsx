@@ -33,7 +33,7 @@ export function KpiCards({
   const totalMeals =
     mealTotals.chicken + mealTotals.fish + mealTotals.veg + mealTotals.egg + mealTotals.other;
 
-  const items = [
+  const items: Array<{ label: string; value: number | string; note: string }> = [
     { label: 'Total Orders', value: totalOrders, note: 'In selected campaign' },
     { label: 'Total Customers', value: totalCustomers, note: 'One order per customer' },
     { label: 'Total Meals', value: totalMeals, note: 'Sum of all meals' },
@@ -46,17 +46,17 @@ export function KpiCards({
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => (
         <Card key={item.label}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 pt-1">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {item.label}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pb-3 pt-0">
             <div className="text-2xl font-semibold">{item.value}</div>
-            <p className="text-xs text-muted-foreground">{item.note}</p>
+            <p className="text-[11px] text-muted-foreground">{item.note}</p>
           </CardContent>
         </Card>
       ))}
