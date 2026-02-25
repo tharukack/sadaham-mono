@@ -278,7 +278,7 @@ export default function DispatchPage() {
                           setSummaryPage(1);
                         }}
                       >
-                        <SelectTrigger className="h-8 w-[110px]">
+                        <SelectTrigger className="h-8 w-full sm:w-[110px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start">
@@ -371,7 +371,7 @@ export default function DispatchPage() {
                           setCollectorPages({});
                         }}
                       >
-                        <SelectTrigger className="h-8 w-[110px]">
+                        <SelectTrigger className="h-8 w-full sm:w-[110px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start">

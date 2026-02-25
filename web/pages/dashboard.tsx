@@ -570,7 +570,11 @@ export default function Dashboard() {
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="justify-between" disabled={disabled}>
+          <Button
+            variant="outline"
+            className="h-auto w-full justify-between text-left whitespace-normal break-words"
+            disabled={disabled}
+          >
             {selected ? selected.name : 'Select location'}
           </Button>
         </PopoverTrigger>
@@ -625,7 +629,11 @@ export default function Dashboard() {
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="justify-between" disabled={disabled}>
+          <Button
+            variant="outline"
+            className="h-auto w-full justify-between text-left whitespace-normal break-words"
+            disabled={disabled}
+          >
             {selected ? `${selected.firstName} ${selected.lastName}`.trim() : 'Select customer'}
           </Button>
         </PopoverTrigger>
@@ -700,7 +708,11 @@ export default function Dashboard() {
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="justify-between" disabled={disabled}>
+          <Button
+            variant="outline"
+            className="h-auto w-full justify-between text-left whitespace-normal break-words"
+            disabled={disabled}
+          >
             {label || 'Select pickup person'}
           </Button>
         </PopoverTrigger>
@@ -809,7 +821,7 @@ export default function Dashboard() {
       <PageHeader title="Dashboard" description="Campaign performance and operational insights." />
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-6">
           {isLoadingCampaigns ? (
             <div className="text-sm text-muted-foreground">Loading campaigns...</div>
           ) : !selectedCampaign ? (
@@ -984,7 +996,7 @@ export default function Dashboard() {
                               setOrdersSortBy(value as 'created' | 'updated' | 'name')
                             }
                           >
-                            <SelectTrigger className="h-8 w-[170px]">
+                            <SelectTrigger className="h-8 w-full sm:w-[170px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent align="start">
@@ -1004,7 +1016,7 @@ export default function Dashboard() {
                             setOrdersPage(1);
                           }}
                         >
-                          <SelectTrigger className="h-8 w-[90px]">
+                          <SelectTrigger className="h-8 w-full sm:w-[90px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent align="start">
@@ -1158,7 +1170,7 @@ export default function Dashboard() {
       )}
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto sm:w-[75vw] sm:max-w-4xl md:w-[70vw] md:max-w-4xl lg:w-[60vw] lg:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Add Order</DialogTitle>
           </DialogHeader>
@@ -1362,7 +1374,7 @@ export default function Dashboard() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto sm:w-[75vw] sm:max-w-4xl md:w-[70vw] md:max-w-4xl lg:w-[60vw] lg:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Edit Order</DialogTitle>
           </DialogHeader>

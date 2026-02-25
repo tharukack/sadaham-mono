@@ -570,7 +570,7 @@ export default function LocationsPage() {
                         setLocationsSortBy(value as 'created' | 'updated' | 'name')
                       }
                     >
-                      <SelectTrigger className="h-8 w-[170px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[170px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
@@ -590,7 +590,7 @@ export default function LocationsPage() {
                         setLocationsPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[90px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[90px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">

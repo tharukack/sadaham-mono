@@ -58,8 +58,8 @@ export function Topbar({ title }: { title: string }) {
   };
 
   return (
-    <div className="flex items-center justify-between gap-4 border-b bg-background px-6 py-4">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-background px-4 py-3 sm:px-6 sm:py-4">
+      <div className="flex min-w-0 items-center gap-3">
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open menu">
@@ -70,7 +70,7 @@ export function Topbar({ title }: { title: string }) {
             <Sidebar />
           </SheetContent>
         </Sheet>
-        <div className="text-lg font-semibold">{title}</div>
+        <div className="truncate text-lg font-semibold">{title}</div>
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

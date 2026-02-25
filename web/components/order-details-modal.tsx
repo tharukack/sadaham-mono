@@ -199,7 +199,7 @@ export function OrderDetailsModal({
       <DialogContent className="max-w-[1100px] max-h-[85vh] overflow-hidden p-0 [&>button]:hidden">
         <div className="flex max-h-[85vh] flex-col">
           <div className="sticky top-0 z-10 border-b bg-background">
-            <div className="flex items-center justify-between px-6 pt-5">
+            <div className="flex items-center justify-between px-4 pt-4 sm:px-6 sm:pt-5">
               <DialogTitle className="text-lg">Order Details</DialogTitle>
               <Button
                 type="button"
@@ -211,7 +211,7 @@ export function OrderDetailsModal({
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
-            <div className="px-6 pb-4">
+            <div className="px-4 pb-4 sm:px-6">
               <Card className="shadow-sm">
                 <CardContent className="grid gap-3 p-4 md:grid-cols-[1.4fr_1fr]">
                   <div>
@@ -231,7 +231,7 @@ export function OrderDetailsModal({
                 </CardContent>
               </Card>
             </div>
-            <div className="px-6 pb-4">
+            <div className="px-4 pb-4 sm:px-6">
               <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">Entered By</Badge>
@@ -251,7 +251,7 @@ export function OrderDetailsModal({
                 </div>
               </div>
             </div>
-            <div className="px-6 pb-4">
+            <div className="px-4 pb-4 sm:px-6">
               <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-4 py-2 text-sm">
                 <span className="text-xs font-semibold uppercase text-muted-foreground">
                   Total Orders
@@ -269,7 +269,7 @@ export function OrderDetailsModal({
               </div>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
+          <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4 sm:px-6">
             <div className="grid gap-4 md:grid-cols-2">
               <Card className="shadow-sm">
                 <CardContent className="p-4 text-sm">
@@ -319,7 +319,9 @@ export function OrderDetailsModal({
                                 key={row.name}
                                 className="grid items-center gap-2 rounded-md border px-3 py-2 md:grid-cols-[1.2fr_1fr_auto]"
                               >
-                                <div className="min-w-[160px] font-medium">{row.name}</div>
+                                <div className="min-w-0 font-medium sm:min-w-[160px]">
+                                  {row.name}
+                                </div>
                                 <div className="text-xs text-muted-foreground md:text-center">
                                   {timestampLabel}
                                 </div>

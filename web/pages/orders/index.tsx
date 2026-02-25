@@ -296,7 +296,7 @@ export default function OrdersPage() {
           </div>
           <div className="flex items-center gap-2 pt-3">
             <Input
-              className="flex-1 min-w-[220px]"
+              className="flex-1 min-w-0 sm:min-w-[220px]"
               placeholder="Search orders by customer, pickup location, or mobile"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -305,7 +305,7 @@ export default function OrdersPage() {
               value={statusFilter}
               onValueChange={(value) => setStatusFilter(value as 'all' | 'active' | 'deleted')}
             >
-              <SelectTrigger className="h-10 w-[180px]">
+              <SelectTrigger className="h-10 w-full sm:w-[180px]">
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent align="start">
@@ -493,7 +493,7 @@ export default function OrdersPage() {
                         setOrdersSortBy(value as 'created' | 'updated' | 'name')
                       }
                     >
-                      <SelectTrigger className="h-8 w-[170px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[170px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
@@ -513,7 +513,7 @@ export default function OrdersPage() {
                         setOrdersPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[90px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[90px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">

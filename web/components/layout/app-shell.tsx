@@ -18,8 +18,8 @@ export function AppShell({ title, children, className }: AppShellProps) {
       </div>
       <div className="flex flex-1 flex-col">
         <Topbar title={title} />
-        <main className={cn('flex-1 p-6', className)}>
-          <div className="mx-auto w-full max-w-6xl space-y-6">{children}</div>
+        <main className={cn('flex-1 min-w-0 p-4 sm:p-6', className)}>
+          <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">{children}</div>
         </main>
       </div>
     </div>

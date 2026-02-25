@@ -1759,7 +1759,7 @@ export default function StatsPage() {
                                         }))
                                       }
                                     >
-                                      <SelectTrigger className="h-8 w-[200px]">
+                                      <SelectTrigger className="h-8 w-full sm:w-[200px]">
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent align="start">
@@ -1800,7 +1800,7 @@ export default function StatsPage() {
                                         }))
                                       }
                                     >
-                                      <SelectTrigger className="h-8 w-[120px]">
+                                      <SelectTrigger className="h-8 w-full sm:w-[120px]">
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent align="start">

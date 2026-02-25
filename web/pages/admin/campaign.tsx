@@ -997,7 +997,7 @@ export default function CampaignPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="w-[90px]"
+                                className="w-full sm:w-[90px]"
                                 onClick={() =>
                                   setExpandedCampaignId(isExpanded ? null : campaign.id)
                                 }
@@ -1037,7 +1037,7 @@ export default function CampaignPage() {
                         setCampaignSortBy(value as 'name' | 'state' | 'started')
                       }
                     >
-                      <SelectTrigger className="h-8 w-[170px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[170px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
@@ -1057,7 +1057,7 @@ export default function CampaignPage() {
                         setCampaignPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[90px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[90px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
@@ -1396,7 +1396,7 @@ export default function CampaignPage() {
                                 )
                               }
                             >
-                              <SelectTrigger className="h-8 w-[170px]">
+                              <SelectTrigger className="h-8 w-full sm:w-[170px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent align="start">
@@ -1416,7 +1416,7 @@ export default function CampaignPage() {
                                 setExpandedOrdersPage(1);
                               }}
                             >
-                              <SelectTrigger className="h-8 w-[90px]">
+                              <SelectTrigger className="h-8 w-full sm:w-[90px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent align="start">

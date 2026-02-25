@@ -438,7 +438,7 @@ export default function UsersPage() {
                         setUsersSortBy(value as 'created' | 'updated' | 'name')
                       }
                     >
-                      <SelectTrigger className="h-8 w-[170px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[170px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
@@ -458,7 +458,7 @@ export default function UsersPage() {
                         setUsersPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[90px]">
+                      <SelectTrigger className="h-8 w-full sm:w-[90px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
