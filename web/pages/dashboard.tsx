@@ -103,10 +103,10 @@ export default function Dashboard() {
   const lastEndedQuery = useQuery({
     queryKey: ['campaign-last-ended'],
     queryFn: async () => (await api.get('/campaigns/last-ended')).data,
-    enabled: currentCampaignQuery.isFetched && !currentCampaignQuery.data,
   });
 
   const selectedCampaign: Campaign | null = currentCampaignQuery.data || lastEndedQuery.data || null;
+  const lastEndedCampaign: Campaign | null = lastEndedQuery.data || null;
   const isFallback = !currentCampaignQuery.data && !!lastEndedQuery.data;
 
   const statsQuery = useQuery<CampaignStats>({
@@ -119,6 +119,12 @@ export default function Dashboard() {
     queryKey: ['campaign-orders', selectedCampaign?.id],
     queryFn: async () => (await api.get(`/campaigns/${selectedCampaign?.id}/orders`)).data,
     enabled: !!selectedCampaign?.id,
+  });
+
+  const lastEndedOrdersQuery = useQuery({
+    queryKey: ['campaign-orders-last-ended', lastEndedCampaign?.id],
+    queryFn: async () => (await api.get(`/campaigns/${lastEndedCampaign?.id}/orders`)).data,
+    enabled: !!lastEndedCampaign?.id,
   });
 
   const locationsQuery = useQuery({
@@ -246,10 +252,63 @@ export default function Dashboard() {
     return (allCustomersQuery.data || []).find((c: any) => c.id === selectedCustomerId);
   }, [allCustomersQuery.data, selectedCustomerId]);
 
+  const getOrderCostForCampaign = (campaign: Campaign | null, order: any) => {
+    const chickenCost = campaign?.chickenCost || 0;
+    const fishCost = campaign?.fishCost || 0;
+    const vegCost = campaign?.vegCost || 0;
+    const eggCost = campaign?.eggCost || 0;
+    const otherCost = campaign?.otherCost || 0;
+    return (
+      Number(order.chickenQty || 0) * chickenCost +
+      Number(order.fishQty || 0) * fishCost +
+      Number(order.vegQty || 0) * vegCost +
+      Number(order.eggQty || 0) * eggCost +
+      Number(order.otherQty || 0) * otherCost
+    );
+  };
+
+  const getOrderCost = (order: any) => getOrderCostForCampaign(selectedCampaign, order);
+
   const existingOrderForCustomer = useMemo(() => {
     if (!selectedCampaign?.id || !selectedCustomerId) return null;
     return orders.find((order: any) => order.customerId === selectedCustomerId) || null;
   }, [orders, selectedCampaign?.id, selectedCustomerId]);
+
+  const lastEndedOrders = useMemo(() => {
+    if (!lastEndedCampaign?.id) return [];
+    return (lastEndedOrdersQuery.data || []) as any[];
+  }, [lastEndedOrdersQuery.data, lastEndedCampaign?.id]);
+
+  const previousOrderForCustomer = useMemo(() => {
+    if (!selectedCustomerId) return null;
+    return (
+      lastEndedOrders.find(
+        (order: any) => order.customerId === selectedCustomerId && !order.deletedAt,
+      ) || null
+    );
+  }, [lastEndedOrders, selectedCustomerId]);
+
+  const previousOrderMealTotals = useMemo(() => {
+    if (!previousOrderForCustomer) return null;
+    return {
+      chicken: Number(previousOrderForCustomer.chickenQty || 0),
+      fish: Number(previousOrderForCustomer.fishQty || 0),
+      veg: Number(previousOrderForCustomer.vegQty || 0),
+      egg: Number(previousOrderForCustomer.eggQty || 0),
+      other: Number(previousOrderForCustomer.otherQty || 0),
+    };
+  }, [previousOrderForCustomer]);
+
+  const previousOrderPacketTotal = useMemo(() => {
+    if (!previousOrderMealTotals) return null;
+    return (
+      previousOrderMealTotals.chicken +
+      previousOrderMealTotals.fish +
+      previousOrderMealTotals.veg +
+      previousOrderMealTotals.egg +
+      previousOrderMealTotals.other
+    );
+  }, [previousOrderMealTotals]);
 
   const canCreateOrders =
     !!currentCampaignQuery.data &&
@@ -337,7 +396,8 @@ export default function Dashboard() {
     !!selectedCustomerId &&
     !!orderForm.pickupLocationId &&
     addMealTotal > 0 &&
-    isAddFormDirty;
+    isAddFormDirty &&
+    !addExistingOrderId;
   const canSubmitEdit =
     canEditOrders && !!editForm.pickupLocationId && editMealTotal > 0 && isEditFormDirty;
 
@@ -352,23 +412,6 @@ export default function Dashboard() {
     const total = meals.reduce((sum, meal) => sum + meal.qty, 0);
     return { total, meals: meals.filter((meal) => meal.qty > 0) };
   };
-
-  const getOrderCost = (order: any) => {
-    const chickenCost = selectedCampaign?.chickenCost || 0;
-    const fishCost = selectedCampaign?.fishCost || 0;
-    const vegCost = selectedCampaign?.vegCost || 0;
-    const eggCost = selectedCampaign?.eggCost || 0;
-    const otherCost = selectedCampaign?.otherCost || 0;
-    return (
-      Number(order.chickenQty || 0) * chickenCost +
-      Number(order.fishQty || 0) * fishCost +
-      Number(order.vegQty || 0) * vegCost +
-      Number(order.eggQty || 0) * eggCost +
-      Number(order.otherQty || 0) * otherCost
-    );
-  };
-
-
 
   useEffect(() => {
     if (!selectedCustomerId) {
@@ -448,6 +491,7 @@ export default function Dashboard() {
   const submitOrder = async (e: FormEvent) => {
     e.preventDefault();
     if (!canCreateOrders) return;
+    if (addExistingOrderId) return;
     setOrderSaving(true);
     try {
       const payload = {
@@ -1182,6 +1226,28 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Add Order</DialogTitle>
           </DialogHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-4 py-2 text-sm">
+            <span className="font-medium text-muted-foreground">
+              Previous campaign order
+              {lastEndedCampaign?.name ? ` — ${lastEndedCampaign.name}` : ''}
+            </span>
+            {!selectedCustomerId ? (
+              <span className="font-semibold text-foreground">Select a customer to view</span>
+            ) : !previousOrderMealTotals || previousOrderPacketTotal === null ? (
+              <span className="font-semibold text-foreground">No order in previous campaign</span>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Total packets: {previousOrderPacketTotal}
+                </span>
+                <Badge variant="secondary">Chicken {previousOrderMealTotals.chicken}</Badge>
+                <Badge variant="secondary">Fish {previousOrderMealTotals.fish}</Badge>
+                <Badge variant="secondary">Veg {previousOrderMealTotals.veg}</Badge>
+                <Badge variant="secondary">Egg {previousOrderMealTotals.egg}</Badge>
+                <Badge variant="secondary">Other {previousOrderMealTotals.other}</Badge>
+              </div>
+            )}
+          </div>
           <form onSubmit={submitOrder} className="space-y-6">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-3 rounded-md border bg-muted/20 p-4">
@@ -1232,7 +1298,14 @@ export default function Dashboard() {
                 )}
                 {addExistingOrderId && (
                   <div className="text-sm text-amber-700">
-                    This customer already has an order. Saving will update the existing order.
+                    There is an existing order for this customer by{' '}
+                    <span className="font-semibold text-amber-900">
+                      {existingOrderForCustomer?.createdBy
+                        ? `${existingOrderForCustomer.createdBy.firstName || ''} ${existingOrderForCustomer.createdBy.lastName || ''}`.trim() ||
+                          'this collector'
+                        : 'this collector'}
+                    </span>
+                    . Use the edit option to update it.
                   </div>
                 )}
               </div>
@@ -1244,7 +1317,7 @@ export default function Dashboard() {
                 <PickupByPicker
                   value={orderForm.pickupByCustomerId}
                   onChange={(value) => setOrderForm({ ...orderForm, pickupByCustomerId: value })}
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                   open={addPickupByOpen}
                   onOpenChange={setAddPickupByOpen}
                   label={pickupByLabel || 'Select pickup person'}
@@ -1266,7 +1339,7 @@ export default function Dashboard() {
                 <LocationPicker
                   value={orderForm.pickupLocationId}
                   onChange={(value) => setOrderForm({ ...orderForm, pickupLocationId: value })}
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                   open={addLocationOpen}
                   onOpenChange={setAddLocationOpen}
                 />
@@ -1283,7 +1356,7 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setOrderForm({ ...orderForm, chickenQty: Number(e.target.value) })
                   }
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                 />
               </div>
               <div className="space-y-2">
@@ -1296,7 +1369,7 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setOrderForm({ ...orderForm, fishQty: Number(e.target.value) })
                   }
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                 />
               </div>
               <div className="space-y-2">
@@ -1309,7 +1382,7 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setOrderForm({ ...orderForm, vegQty: Number(e.target.value) })
                   }
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                 />
               </div>
               <div className="space-y-2">
@@ -1322,7 +1395,7 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setOrderForm({ ...orderForm, eggQty: Number(e.target.value) })
                   }
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                 />
               </div>
               <div className="space-y-2">
@@ -1335,7 +1408,7 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setOrderForm({ ...orderForm, otherQty: Number(e.target.value) })
                   }
-                  disabled={!canCreateOrders}
+                  disabled={!canCreateOrders || !!addExistingOrderId}
                 />
               </div>
             </div>
@@ -1346,24 +1419,31 @@ export default function Dashboard() {
                 value={orderForm.note}
                 onChange={(e) => setOrderForm({ ...orderForm, note: e.target.value })}
                 placeholder="Add a quick note for this order"
-                disabled={!canCreateOrders}
+                disabled={!canCreateOrders || !!addExistingOrderId}
               />
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={!canSubmitAdd || orderSaving}>
-                {orderSaving ? 'Saving...' : addExistingOrderId ? 'Save Changes' : 'Save Order'}
+                {orderSaving ? 'Saving...' : 'Save Order'}
               </Button>
               {!canCreateOrders && (
                 <span className="text-sm text-muted-foreground">
                   Orders can only be created when a campaign is STARTED.
                 </span>
               )}
-              {selectedCustomerId && !isAddFormDirty && (
+              {addExistingOrderId && (
+                <span className="text-sm text-muted-foreground">
+                  Existing orders must be edited from the order list.
+                </span>
+              )}
+              {selectedCustomerId && !isAddFormDirty && !addExistingOrderId && (
                 <span className="text-sm text-muted-foreground">
                   Make a change to enable saving.
                 </span>
               )}
-              {selectedCustomerId && (!orderForm.pickupLocationId || addMealTotal === 0) && (
+              {selectedCustomerId &&
+                !addExistingOrderId &&
+                (!orderForm.pickupLocationId || addMealTotal === 0) && (
                 <span className="text-sm text-muted-foreground">
                   Select a pickup location and enter at least one meal.
                 </span>

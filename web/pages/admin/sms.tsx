@@ -288,7 +288,7 @@ export default function SmsPage() {
         </CardContent>
       </Card>
       <Dialog open={!!selectedName} onOpenChange={(open) => (!open ? closeEditor() : null)}>
-        <DialogContent className="max-w-4xl h-[80vh] overflow-hidden">
+        <DialogContent className="max-w-4xl lg:max-w-5xl xl:max-w-6xl h-[80vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>{selectedName}</DialogTitle>
           </DialogHeader>

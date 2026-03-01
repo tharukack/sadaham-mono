@@ -1522,7 +1522,7 @@ export default function CampaignPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl sm:max-w-3xl lg:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{editingCampaign ? 'Edit Campaign' : 'Add Campaign'}</DialogTitle>
             <DialogDescription>
