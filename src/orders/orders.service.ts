@@ -4,11 +4,16 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CampaignState, Role, SmsMessageType, User } from '@prisma/client';
 import { SmsService } from '../sms/sms.service';
+import { AuditService } from '../audit/audit.service';
 import { interpolateOrderTemplate } from '../sms/sms.utils';
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService, private smsService: SmsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private smsService: SmsService,
+    private audit: AuditService,
+  ) {}
 
   private async sendOrderConfirmation(order: any) {
     const mobile = order?.customer?.mobile;
@@ -59,7 +64,7 @@ export class OrdersService {
   }
 
   async list(user: User) {
-    if (user.role === Role.ADMIN) {
+    if (user.role === Role.ADMIN || user.role === Role.SUPERADMIN) {
       const orders = await this.prisma.order.findMany({
         include: {
           customer: true,
@@ -138,7 +143,11 @@ export class OrdersService {
     if (!current) {
       throw new BadRequestException('No active campaign to create orders.');
     }
-    if (current.state === CampaignState.FROZEN && user.role !== Role.ADMIN) {
+    if (
+      current.state === CampaignState.FROZEN &&
+      user.role !== Role.ADMIN &&
+      user.role !== Role.SUPERADMIN
+    ) {
       throw new ForbiddenException('Only admins can create orders in frozen campaigns.');
     }
     if (dto.campaignId && dto.campaignId !== current.id) {
@@ -186,6 +195,20 @@ export class OrdersService {
             updatedBy: { include: { mainCollector: true } },
           },
         });
+        await this.audit.log(user.id, 'Order', restored.id, 'ORDER_RESTORED', {
+          campaignId: restored.campaignId,
+          customerId: restored.customerId,
+          pickupLocationId: restored.pickupLocationId,
+          pickupByCustomerId: restored.pickupByCustomerId,
+          quantities: {
+            chickenQty: restored.chickenQty,
+            fishQty: restored.fishQty,
+            vegQty: restored.vegQty,
+            eggQty: restored.eggQty,
+            otherQty: restored.otherQty,
+          },
+          note: restored.note || null,
+        });
         const smsError = await this.sendOrderConfirmation(restored);
         return smsError ? { ...restored, smsError } : restored;
       }
@@ -216,6 +239,20 @@ export class OrdersService {
         updatedBy: { include: { mainCollector: true } },
       },
     });
+    await this.audit.log(user.id, 'Order', created.id, 'ORDER_CREATED', {
+      campaignId: created.campaignId,
+      customerId: created.customerId,
+      pickupLocationId: created.pickupLocationId,
+      pickupByCustomerId: created.pickupByCustomerId,
+      quantities: {
+        chickenQty: created.chickenQty,
+        fishQty: created.fishQty,
+        vegQty: created.vegQty,
+        eggQty: created.eggQty,
+        otherQty: created.otherQty,
+      },
+      note: created.note || null,
+    });
     const smsError = await this.sendOrderConfirmation(created);
     return smsError ? { ...created, smsError } : created;
   }
@@ -242,7 +279,7 @@ export class OrdersService {
     if (state === CampaignState.ENDED) {
       throw new ForbiddenException('Orders are read-only for ended campaigns.');
     }
-    if (state === CampaignState.FROZEN && user.role !== Role.ADMIN) {
+    if (state === CampaignState.FROZEN && user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) {
       throw new ForbiddenException('Only admins can edit orders in frozen campaigns.');
     }
 
@@ -262,6 +299,20 @@ export class OrdersService {
         createdBy: { include: { mainCollector: true } },
         updatedBy: { include: { mainCollector: true } },
       },
+    });
+    await this.audit.log(user.id, 'Order', updated.id, 'ORDER_UPDATED', {
+      campaignId: updated.campaignId,
+      customerId: updated.customerId,
+      pickupLocationId: updated.pickupLocationId,
+      pickupByCustomerId: updated.pickupByCustomerId,
+      quantities: {
+        chickenQty: updated.chickenQty,
+        fishQty: updated.fishQty,
+        vegQty: updated.vegQty,
+        eggQty: updated.eggQty,
+        otherQty: updated.otherQty,
+      },
+      note: updated.note || null,
     });
     const smsError = await this.sendOrderModified(updated);
     return smsError ? { ...updated, smsError } : updated;
@@ -289,11 +340,11 @@ export class OrdersService {
     if (state === CampaignState.ENDED) {
       throw new ForbiddenException('Orders are read-only for ended campaigns.');
     }
-    if (state === CampaignState.FROZEN && user.role !== Role.ADMIN) {
+    if (state === CampaignState.FROZEN && user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) {
       throw new ForbiddenException('Only admins can edit orders in frozen campaigns.');
     }
 
-    return this.prisma.order.update({
+    const deleted = await this.prisma.order.update({
       where: { id },
       data: { deletedAt: new Date(), updatedById: user.id },
       include: {
@@ -305,6 +356,11 @@ export class OrdersService {
         updatedBy: { include: { mainCollector: true } },
       },
     });
+    await this.audit.log(user.id, 'Order', deleted.id, 'ORDER_DELETED', {
+      campaignId: deleted.campaignId,
+      customerId: deleted.customerId,
+    });
+    return deleted;
   }
 
   async restore(id: string, user: User) {
@@ -329,11 +385,11 @@ export class OrdersService {
     if (state === CampaignState.ENDED) {
       throw new ForbiddenException('Orders are read-only for ended campaigns.');
     }
-    if (state === CampaignState.FROZEN && user.role !== Role.ADMIN) {
+    if (state === CampaignState.FROZEN && user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) {
       throw new ForbiddenException('Only admins can edit orders in frozen campaigns.');
     }
 
-    return this.prisma.order.update({
+    const restored = await this.prisma.order.update({
       where: { id },
       data: { deletedAt: null, updatedById: user.id },
       include: {
@@ -345,5 +401,10 @@ export class OrdersService {
         updatedBy: { include: { mainCollector: true } },
       },
     });
+    await this.audit.log(user.id, 'Order', restored.id, 'ORDER_RESTORED', {
+      campaignId: restored.campaignId,
+      customerId: restored.customerId,
+    });
+    return restored;
   }
 }

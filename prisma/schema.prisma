@@ -11,6 +11,7 @@ datasource db {
 }
 
 enum Role {
+  SUPERADMIN
   ADMIN
   EDITOR
   VIEWER
@@ -45,7 +46,7 @@ enum SmsBatchStatus {
 model User {
   id             String         @id @default(uuid())
   mobile         String         @unique
-  email          String?        @unique
+  email          String?
   firstName      String
   lastName       String
   address        String?
@@ -88,8 +89,7 @@ model OtpCode {
 model Customer {
   id          String   @id @default(uuid())
   mobile      String   @unique
-  firstName   String
-  lastName    String
+  name        String
   address     String?
   deletedAt   DateTime?
   createdAt   DateTime @default(now())

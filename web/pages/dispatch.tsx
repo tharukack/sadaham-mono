@@ -36,7 +36,7 @@ const getOrderMealTotals = (order: any) => {
 
 const getName = (person?: any) => {
   if (!person) return 'Unknown';
-  const name = `${person.firstName || ''} ${person.lastName || ''}`.trim();
+  const name = `${person.name || ''}`.trim() || `${person.firstName || ''} ${person.lastName || ''}`.trim();
   return name || 'Unknown';
 };
 
@@ -450,7 +450,7 @@ export default function DispatchPage() {
                               {loc.distributorCustomer ? (
                                 <>
                                   <div className="text-sm font-medium">
-                                    {`${loc.distributorCustomer.firstName} ${loc.distributorCustomer.lastName}`.trim()}
+                                    {`${loc.distributorCustomer.name || ''}`.trim()}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     {formatAuMobile(loc.distributorCustomer.mobile || '-') || '-'}
@@ -469,7 +469,7 @@ export default function DispatchPage() {
                               {loc.transporterCustomer ? (
                                 <>
                                   <div className="text-sm font-medium">
-                                    {`${loc.transporterCustomer.firstName} ${loc.transporterCustomer.lastName}`.trim()}
+                                    {`${loc.transporterCustomer.name || ''}`.trim()}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     {formatAuMobile(loc.transporterCustomer.mobile || '-') || '-'}
@@ -877,7 +877,7 @@ export default function DispatchPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Entered By</TableHead>
-                          <TableHead>Main User</TableHead>
+                          <TableHead>Main Collector</TableHead>
                           <TableHead>Customer</TableHead>
                           <TableHead>Mobile</TableHead>
                           <TableHead>Pickup Location</TableHead>

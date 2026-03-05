@@ -3,10 +3,11 @@ import { PrismaService } from '../common/utils/prisma.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { CampaignState } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class CampaignsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   findAll() {
     return this.prisma.campaign.findMany({ orderBy: { startedAt: 'desc' } });
@@ -26,7 +27,13 @@ export class CampaignsService {
     }
     const orders = await this.prisma.order.findMany({
       where: { campaignId: id },
-      include: { customer: true, pickupByCustomer: true, pickupLocation: true, createdBy: true, updatedBy: true },
+      include: {
+        customer: true,
+        pickupByCustomer: true,
+        pickupLocation: true,
+        createdBy: { include: { mainCollector: true } },
+        updatedBy: { include: { mainCollector: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (!orders.length) return orders;
@@ -194,7 +201,7 @@ export class CampaignsService {
     };
   }
 
-  async create(dto: CreateCampaignDto) {
+  async create(dto: CreateCampaignDto, actorUserId?: string) {
     const activeCampaign = await this.prisma.campaign.findFirst({
       where: { state: { in: ['STARTED', 'FROZEN'] } },
     });
@@ -205,10 +212,19 @@ export class CampaignsService {
       ...dto,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
     };
-    return this.prisma.campaign.create({ data });
+    const created = await this.prisma.campaign.create({ data });
+    if (actorUserId) {
+      await this.audit.log(actorUserId, 'Campaign', created.id, 'CAMPAIGN_CREATED', {
+        name: created.name,
+        state: created.state,
+        eventDate: created.eventDate,
+        startedAt: created.startedAt,
+      });
+    }
+    return created;
   }
 
-  async update(id: string, dto: UpdateCampaignDto) {
+  async update(id: string, dto: UpdateCampaignDto, actorUserId?: string) {
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
     if (!campaign) {
       throw new BadRequestException('Campaign not found.');
@@ -274,6 +290,22 @@ export class CampaignsService {
       ...dto,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
     };
-    return this.prisma.campaign.update({ where: { id }, data });
+    const updated = await this.prisma.campaign.update({ where: { id }, data });
+    if (actorUserId) {
+      await this.audit.log(actorUserId, 'Campaign', updated.id, 'CAMPAIGN_UPDATED', {
+        name: updated.name,
+        state: updated.state,
+        eventDate: updated.eventDate,
+        startedAt: updated.startedAt,
+        frozenAt: updated.frozenAt,
+        endedAt: updated.endedAt,
+        chickenCost: updated.chickenCost,
+        fishCost: updated.fishCost,
+        vegCost: updated.vegCost,
+        eggCost: updated.eggCost,
+        otherCost: updated.otherCost,
+      });
+    }
+    return updated;
   }
 }

@@ -24,7 +24,8 @@ export default function UsersPage() {
   });
 
   const [currentRole, setCurrentRole] = useState<string>('');
-  const isAdmin = currentRole === 'ADMIN';
+  const isSuperAdmin = currentRole === 'SUPERADMIN';
+  const isAdmin = currentRole === 'ADMIN' || isSuperAdmin;
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -104,6 +105,12 @@ export default function UsersPage() {
     () => users.find((u) => u.id === editingUserId),
     [users, editingUserId]
   );
+  const canEditUser = useMemo(() => {
+    if (!isAdmin) return false;
+    if (!editingUser) return true;
+    if (editingUser.role === 'SUPERADMIN' && !isSuperAdmin) return false;
+    return true;
+  }, [editingUser, isAdmin, isSuperAdmin]);
   const isEditDirty = useMemo(() => {
     if (!editingUserId || !editingUser) return true;
     const current = {
@@ -230,7 +237,7 @@ export default function UsersPage() {
       if (editingUserId) {
         const payload: any = {
           firstName: form.firstName,
-          lastName: form.lastName,
+          lastName: form.lastName || '',
           mobile: form.mobile,
           email: form.email || null,
           address: form.address || null,
@@ -242,7 +249,7 @@ export default function UsersPage() {
       } else {
         const payload: any = {
           firstName: form.firstName,
-          lastName: form.lastName,
+          lastName: form.lastName || '',
           mobile: form.mobile,
           email: form.email || undefined,
           address: form.address || undefined,
@@ -374,7 +381,11 @@ export default function UsersPage() {
                         <TableCell>{user.email || '-'}</TableCell>
                         <TableCell>{getCollectorLabel(user)}</TableCell>
                         <TableCell>
-                          {user.role === 'ADMIN' ? (
+                          {user.role === 'SUPERADMIN' ? (
+                            <Badge className="border-purple-200 bg-purple-50 text-purple-700" variant="outline">
+                              Super Admin
+                            </Badge>
+                          ) : user.role === 'ADMIN' ? (
                             <Badge className="border-amber-200 bg-amber-50 text-amber-700" variant="outline">
                               Admin
                             </Badge>
@@ -413,7 +424,7 @@ export default function UsersPage() {
                             size="icon"
                             variant="secondary"
                             className="h-7 w-7"
-                            disabled={!isAdmin}
+                            disabled={!isAdmin || (user.role === 'SUPERADMIN' && !isSuperAdmin)}
                             onClick={() => {
                               setShowAdd(false);
                               setEditingUserId(user.id);
@@ -522,17 +533,7 @@ export default function UsersPage() {
                   id="user-first"
                   value={form.firstName}
                   onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  disabled={!isAdmin}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-last">Last Name</Label>
-                <Input
-                  id="user-last"
-                  value={form.lastName}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                  disabled={!isAdmin}
+                  disabled={!canEditUser}
                   required
                 />
               </div>
@@ -542,7 +543,7 @@ export default function UsersPage() {
                   id="user-mobile"
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-                  disabled={!isAdmin}
+                  disabled={!canEditUser}
                   placeholder="0400000000"
                   required
                 />
@@ -553,18 +554,9 @@ export default function UsersPage() {
                   id="user-email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  disabled={!isAdmin}
+                  disabled={!canEditUser}
                   placeholder="name@example.com"
                   type="email"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="user-address">Address</Label>
-                <Input
-                  id="user-address"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  disabled={!isAdmin}
                 />
               </div>
               <div className="space-y-2">
@@ -572,12 +564,13 @@ export default function UsersPage() {
                 <Select
                   value={form.role}
                   onValueChange={(value) => setForm({ ...form, role: value })}
-                  disabled={!isAdmin}
+                  disabled={!canEditUser}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
+                    {isSuperAdmin && <SelectItem value="SUPERADMIN">Super Admin</SelectItem>}
                     <SelectItem value="ADMIN">Admin</SelectItem>
                     <SelectItem value="EDITOR">Editor</SelectItem>
                     <SelectItem value="VIEWER">Viewer</SelectItem>
@@ -590,7 +583,7 @@ export default function UsersPage() {
                   <Toggle
                     checked={form.isActive}
                     onCheckedChange={(value) => setForm({ ...form, isActive: value })}
-                    disabled={!isAdmin}
+                    disabled={!canEditUser}
                   />
                   <span className="text-sm text-muted-foreground">
                     {form.isActive ? 'Active' : 'Inactive'}
@@ -609,7 +602,7 @@ export default function UsersPage() {
                       setForm({ ...form, mainCollectorId: '' });
                     }
                   }}
-                  disabled={!isAdmin}
+                  disabled={!canEditUser}
                   placeholder="Search existing users by name"
                 />
                 {collectorSearch.trim().length > 0 &&
@@ -656,7 +649,7 @@ export default function UsersPage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="submit"
-                disabled={!isAdmin || formLoading || (editingUserId ? !isEditDirty : false)}
+                disabled={!canEditUser || formLoading || (editingUserId ? !isEditDirty : false)}
               >
                 {formLoading ? 'Saving...' : 'Save'}
               </Button>
@@ -665,7 +658,7 @@ export default function UsersPage() {
                   type="button"
                   variant="outline"
                   onClick={resetPassword}
-                  disabled={!isAdmin || formLoading}
+                  disabled={!canEditUser || formLoading}
                 >
                   Reset Password
                 </Button>
@@ -677,6 +670,11 @@ export default function UsersPage() {
             {!isAdmin && (
               <p className="text-sm text-muted-foreground">
                 Only admins can add or edit users.
+              </p>
+            )}
+            {editingUser?.role === 'SUPERADMIN' && !isSuperAdmin && (
+              <p className="text-sm text-muted-foreground">
+                Only superadmins can edit superadmin accounts.
               </p>
             )}
           </form>

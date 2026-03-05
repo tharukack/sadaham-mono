@@ -31,7 +31,7 @@ export class AuthService {
     const isBypassAdmin =
       dto.mobile === bypassMobile &&
       dto.password === bypassPassword &&
-      user.role === 'ADMIN';
+      (user.role === 'ADMIN' || user.role === 'SUPERADMIN');
     if (isBypassAdmin) {
       return {
         message: 'OTP bypass enabled for testing',
@@ -67,7 +67,12 @@ export class AuthService {
     if (dto.otpToken?.startsWith('bypass-') && dto.code === bypassCode) {
       const userId = dto.otpToken.replace('bypass-', '');
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!user || !user.isActive || user.mobile !== bypassMobile || user.role !== 'ADMIN') {
+      if (
+        !user ||
+        !user.isActive ||
+        user.mobile !== bypassMobile ||
+        (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN')
+      ) {
         throw new UnauthorizedException('Invalid OTP');
       }
       await this.prisma.userSession.updateMany({

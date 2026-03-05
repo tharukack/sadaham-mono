@@ -36,12 +36,11 @@ export default function CustomerSearchPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
   const { toast } = useToast();
 
-  const canAccess = currentRole === 'ADMIN' || currentRole === 'EDITOR';
-  const canDelete = currentRole === 'ADMIN';
+  const canAccess = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN' || currentRole === 'EDITOR';
+  const canDelete = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
 
   const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
     mobile: '',
     address: '',
   });
@@ -80,8 +79,8 @@ export default function CustomerSearchPage() {
     const next = [...filteredCustomers];
     next.sort((a: any, b: any) => {
       if (customersSortBy === 'name') {
-        const aName = `${a.firstName || ''} ${a.lastName || ''}`.trim();
-        const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim();
+        const aName = `${a.name || ''}`.trim();
+        const bName = `${b.name || ''}`.trim();
         return aName.localeCompare(bName);
       }
       const aDate = new Date(
@@ -111,8 +110,7 @@ export default function CustomerSearchPage() {
   useEffect(() => {
     if (!editingCustomer) return;
     setForm({
-      firstName: editingCustomer.firstName || '',
-      lastName: editingCustomer.lastName || '',
+      name: editingCustomer.name || '',
       mobile: normalizeAuMobile(editingCustomer.mobile || ''),
       address: editingCustomer.address || '',
     });
@@ -121,19 +119,17 @@ export default function CustomerSearchPage() {
   const isEditDirty = useMemo(() => {
     if (!editingId || !editingCustomer) return true;
     const current = {
-      firstName: (form.firstName || '').trim(),
-      lastName: (form.lastName || '').trim(),
+      name: (form.name || '').trim(),
       mobile: normalizeAuMobile(form.mobile || ''),
       address: (form.address || '').trim(),
     };
     const original = {
-      firstName: (editingCustomer.firstName || '').trim(),
-      lastName: (editingCustomer.lastName || '').trim(),
+      name: (editingCustomer.name || '').trim(),
       mobile: normalizeAuMobile(editingCustomer.mobile || ''),
       address: (editingCustomer.address || '').trim(),
     };
     return JSON.stringify(current) !== JSON.stringify(original);
-  }, [editingCustomer, editingId, form.address, form.firstName, form.lastName, form.mobile]);
+  }, [editingCustomer, editingId, form.address, form.name, form.mobile]);
 
   useEffect(() => {
     setCustomersPage(1);
@@ -145,8 +141,7 @@ export default function CustomerSearchPage() {
 
   const resetForm = () => {
     setForm({
-      firstName: '',
-      lastName: '',
+      name: '',
       mobile: '',
       address: '',
     });
@@ -161,15 +156,13 @@ export default function CustomerSearchPage() {
     try {
       if (editingId) {
         await api.post(`/customers/${editingId}`, {
-          firstName: form.firstName,
-          lastName: form.lastName,
+          name: form.name,
           mobile: form.mobile,
           address: form.address || undefined,
         });
       } else {
         await api.post('/customers', {
-          firstName: form.firstName,
-          lastName: form.lastName,
+          name: form.name,
           mobile: form.mobile,
           address: form.address || undefined,
         });
@@ -305,7 +298,7 @@ export default function CustomerSearchPage() {
                     {pagedCustomers.map((c: any) => (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">
-                          {c.firstName} {c.lastName}
+                          {c.name}
                         </TableCell>
                         <TableCell>{formatAuMobile(c.mobile || '')}</TableCell>
                         <TableCell>{c.address || '-'}</TableCell>
@@ -467,20 +460,11 @@ export default function CustomerSearchPage() {
           <form onSubmit={submit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="customer-first">First Name</Label>
+                <Label htmlFor="customer-name">Name</Label>
                 <Input
-                  id="customer-first"
-                  value={form.firstName}
-                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customer-last">Last Name</Label>
-                <Input
-                  id="customer-last"
-                  value={form.lastName}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                  id="customer-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
                 />
               </div>

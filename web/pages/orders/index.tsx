@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { AppShell } from '../../components/layout/app-shell';
@@ -9,10 +9,19 @@ import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Textarea } from '../../components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import { OrderDetailsModal } from '../../components/order-details-modal';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../../components/ui/command';
 import {
   Select,
   SelectContent,
@@ -47,6 +56,17 @@ export default function OrdersPage() {
     queryKey: ['orders'],
     queryFn: async () => (await api.get('/orders')).data,
   });
+  const locationsQuery = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => (await api.get('/locations')).data,
+    enabled: !!currentCampaignQuery.data?.id,
+  });
+  const [editPickupByOpen, setEditPickupByOpen] = useState(false);
+  const allCustomersQuery = useQuery({
+    queryKey: ['customers-all', currentCampaignQuery.data?.id],
+    queryFn: async () => (await api.get('/customers/search', { params: { q: '' } })).data,
+    enabled: !!currentCampaignQuery.data?.id && editPickupByOpen,
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
   const [ordersPage, setOrdersPage] = useState(1);
@@ -55,7 +75,21 @@ export default function OrdersPage() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [editPickupByLabel, setEditPickupByLabel] = useState('');
+  const [editLocationOpen, setEditLocationOpen] = useState(false);
+  const [editOriginalForm, setEditOriginalForm] = useState({
+    pickupLocationId: '',
+    pickupByCustomerId: '',
+    chickenQty: 0,
+    fishQty: 0,
+    vegQty: 0,
+    eggQty: 0,
+    otherQty: 0,
+    note: '',
+  });
   const [editForm, setEditForm] = useState({
+    pickupLocationId: '',
+    pickupByCustomerId: '',
     chickenQty: 0,
     fishQty: 0,
     vegQty: 0,
@@ -80,7 +114,7 @@ export default function OrdersPage() {
         : scoped;
     if (!term) return statusScoped;
     return statusScoped.filter((order: any) => {
-      const customerName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim();
+      const customerName = `${order.customer?.name || ''}`.trim();
       const pickup = order.pickupLocation?.name || '';
       const mobile = order.customer?.mobile || '';
       const mobileDigits = mobile.replace(/\D/g, '');
@@ -97,8 +131,8 @@ export default function OrdersPage() {
     const next = [...orders];
     next.sort((a: any, b: any) => {
       if (ordersSortBy === 'name') {
-        const aName = `${a.customer?.firstName || ''} ${a.customer?.lastName || ''}`.trim();
-        const bName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.trim();
+        const aName = `${a.customer?.name || ''}`.trim();
+        const bName = `${b.customer?.name || ''}`.trim();
         return aName.localeCompare(bName);
       }
       const aDate = new Date(
@@ -170,7 +204,7 @@ export default function OrdersPage() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat(undefined, { style: 'currency', currency: 'AUD' }).format(value);
 
-  const isAdmin = currentRole === 'ADMIN';
+  const isAdmin = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
   const isEditor = currentRole === 'EDITOR';
   const canCreateOrders =
     (currentCampaignQuery.data?.state === 'STARTED' && (isAdmin || isEditor)) ||
@@ -181,24 +215,70 @@ export default function OrdersPage() {
       : currentCampaignQuery.data?.state === 'FROZEN'
       ? isAdmin
       : false;
+  const isEditFormDirty = useMemo(() => {
+    const current = {
+      pickupLocationId: editForm.pickupLocationId || '',
+      pickupByCustomerId: editForm.pickupByCustomerId || '',
+      chickenQty: Number(editForm.chickenQty || 0),
+      fishQty: Number(editForm.fishQty || 0),
+      vegQty: Number(editForm.vegQty || 0),
+      eggQty: Number(editForm.eggQty || 0),
+      otherQty: Number(editForm.otherQty || 0),
+      note: editForm.note || '',
+    };
+    const original = {
+      pickupLocationId: editOriginalForm.pickupLocationId || '',
+      pickupByCustomerId: editOriginalForm.pickupByCustomerId || '',
+      chickenQty: Number(editOriginalForm.chickenQty || 0),
+      fishQty: Number(editOriginalForm.fishQty || 0),
+      vegQty: Number(editOriginalForm.vegQty || 0),
+      eggQty: Number(editOriginalForm.eggQty || 0),
+      otherQty: Number(editOriginalForm.otherQty || 0),
+      note: editOriginalForm.note || '',
+    };
+    return JSON.stringify(current) !== JSON.stringify(original);
+  }, [editForm, editOriginalForm]);
+  const editMealTotal = useMemo(() => {
+    return (
+      Number(editForm.chickenQty || 0) +
+      Number(editForm.fishQty || 0) +
+      Number(editForm.vegQty || 0) +
+      Number(editForm.eggQty || 0) +
+      Number(editForm.otherQty || 0)
+    );
+  }, [editForm]);
+  const canSubmitEdit =
+    canEditOrders && !!editForm.pickupLocationId && editMealTotal > 0 && isEditFormDirty;
 
   const startEdit = (order: any) => {
     setEditingOrderId(order.id);
-    setEditForm({
+    setEditPickupByLabel(
+      order.pickupByCustomer
+        ? `${order.pickupByCustomer.name || ''}`.trim()
+        : `${order.customer?.name || ''}`.trim()
+    );
+    const base = {
+      pickupLocationId: order.pickupLocationId || '',
+      pickupByCustomerId: order.pickupByCustomerId || order.customerId || '',
       chickenQty: Number(order.chickenQty || 0),
       fishQty: Number(order.fishQty || 0),
       vegQty: Number(order.vegQty || 0),
       eggQty: Number(order.eggQty || 0),
       otherQty: Number(order.otherQty || 0),
       note: order.note || '',
-    });
+    };
+    setEditOriginalForm(base);
+    setEditForm(base);
   };
 
-  const submitEdit = async () => {
+  const submitEdit = async (e: FormEvent) => {
+    e.preventDefault();
     if (!editingOrderId || !canEditOrders) return;
     setEditSaving(true);
     try {
       const response = await api.patch(`/orders/${editingOrderId}`, {
+        pickupLocationId: editForm.pickupLocationId,
+        pickupByCustomerId: editForm.pickupByCustomerId || undefined,
         chickenQty: Number(editForm.chickenQty || 0),
         fishQty: Number(editForm.fishQty || 0),
         vegQty: Number(editForm.vegQty || 0),
@@ -208,6 +288,7 @@ export default function OrdersPage() {
       });
       await ordersQuery.refetch();
       setEditingOrderId(null);
+      setEditPickupByLabel('');
       toast({ title: 'Order updated' });
       if (response?.data?.smsError) {
         toast({
@@ -225,6 +306,139 @@ export default function OrdersPage() {
     } finally {
       setEditSaving(false);
     }
+  };
+
+  const LocationPicker = ({
+    value,
+    onChange,
+    disabled,
+    open,
+    onOpenChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    disabled?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  }) => {
+    const selected = (locationsQuery.data || []).find((loc: any) => loc.id === value);
+
+    return (
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="h-auto w-full justify-between text-left whitespace-normal break-words"
+            disabled={disabled}
+          >
+            {selected ? selected.name : 'Select location'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search locations..." />
+            <CommandList>
+              <CommandEmpty>No locations found.</CommandEmpty>
+              <CommandGroup>
+                {(locationsQuery.data || []).map((loc: any) => (
+                  <CommandItem
+                    key={loc.id}
+                    value={`${loc.name} ${loc.distributorName}`}
+                    onSelect={() => {
+                      onChange(loc.id);
+                      onOpenChange(false);
+                    }}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{loc.name}</span>
+                      <span className="text-xs text-muted-foreground">{loc.distributorName}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const PickupByPicker = ({
+    onChange,
+    disabled,
+    open,
+    onOpenChange,
+    label,
+  }: {
+    onChange: (value: string) => void;
+    disabled?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    label?: string;
+  }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const isMobileSearch = !!searchTerm.trim() && /\d/.test(searchTerm);
+
+    return (
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="h-auto w-full justify-between text-left whitespace-normal break-words"
+            disabled={disabled}
+          >
+            {label || 'Select pickup person'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0" align="start">
+          <Command>
+            <CommandInput
+              placeholder="Search pickup person by name or mobile"
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+            />
+            <CommandList>
+              {allCustomersQuery.isLoading ? (
+                <CommandEmpty>Loading customers...</CommandEmpty>
+              ) : (allCustomersQuery.data || []).length === 0 ? (
+                <CommandEmpty>No customers found.</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {(allCustomersQuery.data || []).map((c: any) => (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.name} ${formatAuMobile(c.mobile || '')}`}
+                      onSelect={() => {
+                        onChange(c.id);
+                        setEditPickupByLabel(`${c.name || ''}`.trim());
+                        onOpenChange(false);
+                      }}
+                    >
+                      <div className="text-left">
+                        <div
+                          className={
+                            isMobileSearch ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+                          }
+                        >
+                          {c.name}
+                        </div>
+                        <div
+                          className={
+                            isMobileSearch ? 'text-sm font-medium' : 'text-xs text-muted-foreground'
+                          }
+                        >
+                          {formatAuMobile(c.mobile || '')}
+                        </div>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
   };
 
   const deleteOrder = async (id: string) => {
@@ -362,15 +576,15 @@ export default function OrdersPage() {
                             className="text-left text-foreground underline-offset-4 hover:underline"
                             onClick={() => setDetailOrder(order)}
                           >
-                            {order.customer?.firstName} {order.customer?.lastName}
+                            {order.customer?.name}
                           </button>
                         </TableCell>
                         <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
                         <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
                         <TableCell>
                           {order.pickupByCustomer
-                            ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
-                            : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()}
+                            ? `${order.pickupByCustomer.name || ''}`.trim()
+                            : `${order.customer?.name || ''}`.trim()}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 whitespace-nowrap">
@@ -564,93 +778,132 @@ export default function OrdersPage() {
       <Dialog
         open={!!editingOrderId}
         onOpenChange={(open) => {
-          if (!open) setEditingOrderId(null);
+          if (!open) {
+            setEditingOrderId(null);
+            setEditPickupByLabel('');
+          }
         }}
       >
-        <DialogContent className="max-w-xl">
+        <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto sm:w-[75vw] sm:max-w-4xl md:w-[70vw] md:max-w-4xl lg:w-[60vw] lg:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Edit Order</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <form onSubmit={submitEdit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="orders-edit-chicken">Chicken</Label>
-              <Input
-                id="orders-edit-chicken"
-                type="number"
-                min={0}
-                value={editForm.chickenQty}
-                onChange={(e) => setEditForm({ ...editForm, chickenQty: Number(e.target.value) })}
+              <Label>Pickup Location</Label>
+              <LocationPicker
+                value={editForm.pickupLocationId}
+                onChange={(value) => setEditForm({ ...editForm, pickupLocationId: value })}
                 disabled={!canEditOrders}
+                open={editLocationOpen}
+                onOpenChange={setEditLocationOpen}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="orders-edit-fish">Fish</Label>
-              <Input
-                id="orders-edit-fish"
-                type="number"
-                min={0}
-                value={editForm.fishQty}
-                onChange={(e) => setEditForm({ ...editForm, fishQty: Number(e.target.value) })}
+              <Label>Order Pickup By</Label>
+              <PickupByPicker
+                onChange={(value) => setEditForm({ ...editForm, pickupByCustomerId: value })}
                 disabled={!canEditOrders}
+                open={editPickupByOpen}
+                onOpenChange={setEditPickupByOpen}
+                label={editPickupByLabel || 'Select pickup person'}
               />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Pickup by:{' '}
+              {editForm.pickupByCustomerId ? editPickupByLabel || 'Selected' : 'Same as customer'}
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+              <div className="space-y-2">
+                <Label htmlFor="orders-edit-chicken">Chicken</Label>
+                <Input
+                  id="orders-edit-chicken"
+                  type="number"
+                  min={0}
+                  value={editForm.chickenQty}
+                  onChange={(e) => setEditForm({ ...editForm, chickenQty: Number(e.target.value) })}
+                  disabled={!canEditOrders}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="orders-edit-fish">Fish</Label>
+                <Input
+                  id="orders-edit-fish"
+                  type="number"
+                  min={0}
+                  value={editForm.fishQty}
+                  onChange={(e) => setEditForm({ ...editForm, fishQty: Number(e.target.value) })}
+                  disabled={!canEditOrders}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="orders-edit-veg">Veg</Label>
+                <Input
+                  id="orders-edit-veg"
+                  type="number"
+                  min={0}
+                  value={editForm.vegQty}
+                  onChange={(e) => setEditForm({ ...editForm, vegQty: Number(e.target.value) })}
+                  disabled={!canEditOrders}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="orders-edit-egg">Egg</Label>
+                <Input
+                  id="orders-edit-egg"
+                  type="number"
+                  min={0}
+                  value={editForm.eggQty}
+                  onChange={(e) => setEditForm({ ...editForm, eggQty: Number(e.target.value) })}
+                  disabled={!canEditOrders}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="orders-edit-other">Other</Label>
+                <Input
+                  id="orders-edit-other"
+                  type="number"
+                  min={0}
+                  value={editForm.otherQty}
+                  onChange={(e) => setEditForm({ ...editForm, otherQty: Number(e.target.value) })}
+                  disabled={!canEditOrders}
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="orders-edit-veg">Veg</Label>
-              <Input
-                id="orders-edit-veg"
-                type="number"
-                min={0}
-                value={editForm.vegQty}
-                onChange={(e) => setEditForm({ ...editForm, vegQty: Number(e.target.value) })}
+              <Label htmlFor="orders-edit-note">Order Note</Label>
+              <Textarea
+                id="orders-edit-note"
+                value={editForm.note}
+                onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
+                placeholder="Add a quick note for this order"
                 disabled={!canEditOrders}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="orders-edit-egg">Egg</Label>
-              <Input
-                id="orders-edit-egg"
-                type="number"
-                min={0}
-                value={editForm.eggQty}
-                onChange={(e) => setEditForm({ ...editForm, eggQty: Number(e.target.value) })}
-                disabled={!canEditOrders}
-              />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" disabled={!canSubmitEdit || editSaving}>
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button variant="secondary" type="button" onClick={() => setEditingOrderId(null)}>
+                Cancel
+              </Button>
+              {!canEditOrders && (
+                <span className="text-sm text-muted-foreground">
+                  Editing is restricted based on the campaign state.
+                </span>
+              )}
+              {canEditOrders && !isEditFormDirty && (
+                <span className="text-sm text-muted-foreground">
+                  Make a change to enable saving.
+                </span>
+              )}
+              {canEditOrders && (!editForm.pickupLocationId || editMealTotal === 0) && (
+                <span className="text-sm text-muted-foreground">
+                  Select a pickup location and enter at least one meal.
+                </span>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="orders-edit-other">Other</Label>
-              <Input
-                id="orders-edit-other"
-                type="number"
-                min={0}
-                value={editForm.otherQty}
-                onChange={(e) => setEditForm({ ...editForm, otherQty: Number(e.target.value) })}
-                disabled={!canEditOrders}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="orders-edit-note">Order Note</Label>
-            <Textarea
-              id="orders-edit-note"
-              value={editForm.note}
-              onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
-              placeholder="Add a quick note for this order"
-              disabled={!canEditOrders}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={submitEdit} disabled={!canEditOrders || editSaving}>
-              {editSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
-            <Button variant="secondary" type="button" onClick={() => setEditingOrderId(null)}>
-              Cancel
-            </Button>
-            {!canEditOrders && (
-              <span className="text-sm text-muted-foreground">
-                Editing is restricted based on the campaign state.
-              </span>
-            )}
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
       <OrderDetailsModal

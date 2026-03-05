@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Role } from '@prisma/client';
@@ -24,6 +24,25 @@ export class StatsController {
     return this.statsService.compareCampaigns(
       body?.baselineCampaignId || '',
       body?.compareCampaignIds || [],
+    );
+  }
+
+  @Get('main-collectors')
+  @Roles(Role.ADMIN)
+  listMainCollectors() {
+    return this.statsService.listMainCollectors();
+  }
+
+  @Post('main-collector-customers')
+  @Roles(Role.ADMIN)
+  mainCollectorCustomers(
+    @Body()
+    body: { mainCollectorId?: string; baselineCampaignId?: string; compareCampaignId?: string },
+  ) {
+    return this.statsService.mainCollectorCustomers(
+      body?.mainCollectorId || '',
+      body?.baselineCampaignId || '',
+      body?.compareCampaignId || '',
     );
   }
 }

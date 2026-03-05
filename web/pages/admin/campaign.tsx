@@ -72,11 +72,8 @@ export default function CampaignPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [pickupBySearch, setPickupBySearch] = useState('');
   const [pickupByLabel, setPickupByLabel] = useState('');
-  const [editPickupByLabel, setEditPickupByLabel] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [orderSaving, setOrderSaving] = useState(false);
-  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
-  const [editSaving, setEditSaving] = useState(false);
   const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
   const [expandedOrdersPage, setExpandedOrdersPage] = useState(1);
   const [expandedOrdersRowsPerPage, setExpandedOrdersRowsPerPage] = useState(10);
@@ -90,19 +87,7 @@ export default function CampaignPage() {
   const [smsActionBusy, setSmsActionBusy] = useState(false);
   const smsProcessingRef = useRef(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [addLocationOpen, setAddLocationOpen] = useState(false);
-  const [editLocationOpen, setEditLocationOpen] = useState(false);
-  const [editOriginalForm, setEditOriginalForm] = useState({
-    pickupLocationId: '',
-    pickupByCustomerId: '',
-    chickenQty: 0,
-    fishQty: 0,
-    vegQty: 0,
-    eggQty: 0,
-    otherQty: 0,
-    note: '',
-  });
   const [addExistingOrderId, setAddExistingOrderId] = useState<string | null>(null);
   const [addOriginalForm, setAddOriginalForm] = useState({
     pickupLocationId: '',
@@ -124,17 +109,7 @@ export default function CampaignPage() {
     otherQty: 0,
     note: '',
   });
-  const [editForm, setEditForm] = useState({
-    pickupLocationId: '',
-    pickupByCustomerId: '',
-    chickenQty: 0,
-    fishQty: 0,
-    vegQty: 0,
-    eggQty: 0,
-    otherQty: 0,
-    note: '',
-  });
-  const isAdmin = currentRole === 'ADMIN';
+  const isAdmin = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
   const isEditor = currentRole === 'EDITOR';
   const isCustomerSearchMobile = !!customerSearch.trim() && /\d/.test(customerSearch);
   const isPickupBySearchMobile = !!pickupBySearch.trim() && /\d/.test(pickupBySearch);
@@ -308,29 +283,6 @@ export default function CampaignPage() {
     return JSON.stringify(current) !== JSON.stringify(original);
   }, [orderForm, addOriginalForm]);
 
-  const isEditFormDirty = useMemo(() => {
-    const current = {
-      pickupLocationId: editForm.pickupLocationId || '',
-      pickupByCustomerId: editForm.pickupByCustomerId || '',
-      chickenQty: Number(editForm.chickenQty || 0),
-      fishQty: Number(editForm.fishQty || 0),
-      vegQty: Number(editForm.vegQty || 0),
-      eggQty: Number(editForm.eggQty || 0),
-      otherQty: Number(editForm.otherQty || 0),
-      note: editForm.note || '',
-    };
-    const original = {
-      pickupLocationId: editOriginalForm.pickupLocationId || '',
-      pickupByCustomerId: editOriginalForm.pickupByCustomerId || '',
-      chickenQty: Number(editOriginalForm.chickenQty || 0),
-      fishQty: Number(editOriginalForm.fishQty || 0),
-      vegQty: Number(editOriginalForm.vegQty || 0),
-      eggQty: Number(editOriginalForm.eggQty || 0),
-      otherQty: Number(editOriginalForm.otherQty || 0),
-      note: editOriginalForm.note || '',
-    };
-    return JSON.stringify(current) !== JSON.stringify(original);
-  }, [editForm, editOriginalForm]);
 
   const addMealTotal = useMemo(() => {
     return (
@@ -342,15 +294,6 @@ export default function CampaignPage() {
     );
   }, [orderForm]);
 
-  const editMealTotal = useMemo(() => {
-    return (
-      Number(editForm.chickenQty || 0) +
-      Number(editForm.fishQty || 0) +
-      Number(editForm.vegQty || 0) +
-      Number(editForm.eggQty || 0) +
-      Number(editForm.otherQty || 0)
-    );
-  }, [editForm]);
 
   const canSubmitAdd =
     canCreateOrders &&
@@ -358,8 +301,6 @@ export default function CampaignPage() {
     !!orderForm.pickupLocationId &&
     addMealTotal > 0 &&
     isAddFormDirty;
-  const canSubmitEdit =
-    canEditOrders && !!editForm.pickupLocationId && editMealTotal > 0 && isEditFormDirty;
 
   const campaignList = useMemo(() => {
     if (isAdmin) return campaigns || [];
@@ -661,67 +602,6 @@ export default function CampaignPage() {
     }
   };
 
-  const startEdit = (order: any) => {
-    setEditingOrderId(order.id);
-    setShowEditModal(true);
-    setPickupBySearch('');
-    setEditPickupByLabel(
-      order.pickupByCustomer
-        ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
-        : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()
-    );
-    const base = {
-      pickupLocationId: order.pickupLocationId || '',
-      pickupByCustomerId: order.pickupByCustomerId || order.customerId || '',
-      chickenQty: order.chickenQty || 0,
-      fishQty: order.fishQty || 0,
-      vegQty: order.vegQty || 0,
-      eggQty: order.eggQty || 0,
-      otherQty: order.otherQty || 0,
-      note: order.note || '',
-    };
-    setEditOriginalForm(base);
-    setEditForm(base);
-  };
-
-  const submitEdit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!editingOrderId || !canEditOrders) return;
-    setEditSaving(true);
-    try {
-      const response = await api.patch(`/orders/${editingOrderId}`, {
-        pickupLocationId: editForm.pickupLocationId,
-        pickupByCustomerId: editForm.pickupByCustomerId || undefined,
-        chickenQty: Number(editForm.chickenQty || 0),
-        fishQty: Number(editForm.fishQty || 0),
-        vegQty: Number(editForm.vegQty || 0),
-        eggQty: Number(editForm.eggQty || 0),
-        otherQty: Number(editForm.otherQty || 0),
-        note: editForm.note || undefined,
-      });
-      setEditingOrderId(null);
-      setShowEditModal(false);
-      setPickupBySearch('');
-      setEditPickupByLabel('');
-      await queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast({ title: 'Order updated' });
-      if (response?.data?.smsError) {
-        toast({
-          variant: 'destructive',
-          title: 'SMS error',
-          description: response.data.smsError,
-        });
-      }
-    } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to update order',
-        description: err?.response?.data?.message || 'Unable to update order.',
-      });
-    } finally {
-      setEditSaving(false);
-    }
-  };
 
   useEffect(() => {
     if (!selectedCustomerId) {
@@ -755,8 +635,8 @@ export default function CampaignPage() {
       setOrderForm(base);
       setPickupByLabel(
         existingOrderForCustomer.pickupByCustomer
-          ? `${existingOrderForCustomer.pickupByCustomer.firstName} ${existingOrderForCustomer.pickupByCustomer.lastName}`.trim()
-          : `${existingOrderForCustomer.customer?.firstName || ''} ${existingOrderForCustomer.customer?.lastName || ''}`.trim()
+          ? `${existingOrderForCustomer.pickupByCustomer.name || ''}`.trim()
+          : `${existingOrderForCustomer.customer?.name || ''}`.trim()
       );
     } else {
       const empty = {
@@ -1265,8 +1145,8 @@ export default function CampaignPage() {
               const visibleOrders = (orders || []).filter((o: any) => o.campaignId === campaign.id);
               const sortedOrders = [...visibleOrders].sort((a: any, b: any) => {
                 if (expandedOrdersSortBy === 'name') {
-                  const aName = `${a.customer?.firstName || ''} ${a.customer?.lastName || ''}`.trim();
-                  const bName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.trim();
+                  const aName = `${a.customer?.name || ''}`.trim();
+                  const bName = `${b.customer?.name || ''}`.trim();
                   return aName.localeCompare(bName);
                 }
                 const aDate = new Date(
@@ -1307,8 +1187,7 @@ export default function CampaignPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>#</TableHead>
-                              <TableHead>First Name</TableHead>
-                              <TableHead>Last Name</TableHead>
+                              <TableHead>Name</TableHead>
                               <TableHead>Mobile</TableHead>
                               <TableHead>Created By</TableHead>
                               <TableHead>Edited By</TableHead>
@@ -1317,7 +1196,6 @@ export default function CampaignPage() {
                               <TableHead>Collection Point</TableHead>
                               <TableHead>Pickup By</TableHead>
                               <TableHead>Note</TableHead>
-                              <TableHead>Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1337,8 +1215,7 @@ export default function CampaignPage() {
                               return (
                                 <TableRow key={order.id}>
                                   <TableCell>{expandedOrdersStart + index + 1}</TableCell>
-                                  <TableCell>{order.customer?.firstName || 'Unknown'}</TableCell>
-                                  <TableCell>{order.customer?.lastName || 'Unknown'}</TableCell>
+                                  <TableCell>{order.customer?.name || 'Unknown'}</TableCell>
                                   <TableCell>
                                     {formatAuMobile(order.customer?.mobile || '') || 'Unknown'}
                                   </TableCell>
@@ -1359,25 +1236,10 @@ export default function CampaignPage() {
                                   <TableCell>{order.pickupLocation?.name || 'Unknown'}</TableCell>
                                   <TableCell>
                                     {order.pickupByCustomer
-                                      ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
-                                      : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()}
+                                      ? `${order.pickupByCustomer.name || ''}`.trim()
+                                      : `${order.customer?.name || ''}`.trim()}
                                   </TableCell>
                                   <TableCell>{order.note || '-'}</TableCell>
-                                  <TableCell>
-                                    {canEditOrders ? (
-                                      <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        onClick={() => startEdit(order)}
-                                      >
-                                        Edit
-                                      </Button>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">
-                                        No access
-                                      </span>
-                                    )}
-                                  </TableCell>
                                 </TableRow>
                               );
                             })}
@@ -1733,7 +1595,7 @@ export default function CampaignPage() {
                               : 'text-sm font-medium'
                           }
                         >
-                          {c.firstName} {c.lastName}
+                          {c.name}
                         </div>
                         <div
                           className={
@@ -1752,7 +1614,7 @@ export default function CampaignPage() {
             )}
             {selectedCustomer && (
               <div className="text-sm text-muted-foreground">
-                Selected: {selectedCustomer.firstName} {selectedCustomer.lastName}
+                Selected: {selectedCustomer.name}
               </div>
             )}
             <div className="space-y-2">
@@ -1781,7 +1643,7 @@ export default function CampaignPage() {
                       className="w-full justify-start rounded-none"
                       onClick={() => {
                         setOrderForm({ ...orderForm, pickupByCustomerId: c.id });
-                        setPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
+                        setPickupByLabel(`${c.name || ''}`.trim());
                         setPickupBySearch('');
                       }}
                       disabled={!canCreateOrders}
@@ -1794,7 +1656,7 @@ export default function CampaignPage() {
                               : 'text-sm font-medium'
                           }
                         >
-                          {c.firstName} {c.lastName}
+                          {c.name}
                         </div>
                         <div
                           className={
@@ -1938,197 +1800,6 @@ export default function CampaignPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={showEditModal}
-        onOpenChange={(open) => {
-          setShowEditModal(open);
-          if (!open) {
-            setEditingOrderId(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Order</DialogTitle>
-            <DialogDescription>Update the existing order details.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={submitEdit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Pickup Location</Label>
-              <LocationPicker
-                value={editForm.pickupLocationId}
-                onChange={(value) => setEditForm({ ...editForm, pickupLocationId: value })}
-                disabled={!canEditOrders}
-                open={editLocationOpen}
-                onOpenChange={setEditLocationOpen}
-              />
-              {isLocationsLoading && (
-                <p className="text-xs text-muted-foreground">Loading locations...</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label>Order Pickup By</Label>
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  value={pickupBySearch}
-                  onChange={(e) => setPickupBySearch(e.target.value)}
-                  placeholder="Search pickup person by name or mobile"
-                  disabled={!canEditOrders}
-                />
-              </div>
-            </div>
-            {pickupBySearch.trim().length > 0 && (
-              <div className="rounded-md border">
-                {isPickupByLoading ? (
-                  <div className="p-3 text-sm text-muted-foreground">Loading customers...</div>
-                ) : (pickupByCustomers || []).length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No customers found.</div>
-                ) : (
-                  (pickupByCustomers || []).map((c: any) => (
-                    <Button
-                      key={c.id}
-                      type="button"
-                      variant={editForm.pickupByCustomerId === c.id ? 'secondary' : 'ghost'}
-                      className="w-full justify-start rounded-none"
-                      onClick={() => {
-                        setEditForm({ ...editForm, pickupByCustomerId: c.id });
-                        setEditPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
-                        setPickupBySearch('');
-                      }}
-                      disabled={!canEditOrders}
-                    >
-                      <div className="text-left">
-                        <div
-                          className={
-                            isPickupBySearchMobile
-                              ? 'text-xs text-muted-foreground'
-                              : 'text-sm font-medium'
-                          }
-                        >
-                          {c.firstName} {c.lastName}
-                        </div>
-                        <div
-                          className={
-                            isPickupBySearchMobile
-                              ? 'text-sm font-medium'
-                              : 'text-xs text-muted-foreground'
-                          }
-                        >
-                          {formatAuMobile(c.mobile || '')}
-                        </div>
-                      </div>
-                    </Button>
-                  ))
-                )}
-              </div>
-            )}
-            <div className="text-sm text-muted-foreground">
-              Pickup by:{' '}
-              {editForm.pickupByCustomerId ? editPickupByLabel || 'Selected' : 'Same as customer'}
-            </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="edit-chicken">Chicken</Label>
-                <Input
-                  id="edit-chicken"
-                  type="number"
-                  min={0}
-                  value={editForm.chickenQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, chickenQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-fish">Fish</Label>
-                <Input
-                  id="edit-fish"
-                  type="number"
-                  min={0}
-                  value={editForm.fishQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, fishQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-veg">Veg</Label>
-                <Input
-                  id="edit-veg"
-                  type="number"
-                  min={0}
-                  value={editForm.vegQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, vegQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-egg">Egg</Label>
-                <Input
-                  id="edit-egg"
-                  type="number"
-                  min={0}
-                  value={editForm.eggQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, eggQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-other">Other</Label>
-                <Input
-                  id="edit-other"
-                  type="number"
-                  min={0}
-                  value={editForm.otherQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, otherQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-note">Order Note</Label>
-              <Textarea
-                id="edit-note"
-                value={editForm.note}
-                onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
-                placeholder="Add a quick note for this order"
-                disabled={!canEditOrders}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={!canSubmitEdit || editSaving}>
-                {editSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
-              <Button variant="secondary" type="button" onClick={() => setShowEditModal(false)}>
-                Cancel
-              </Button>
-              {!canEditOrders && (
-                <span className="text-sm text-muted-foreground">
-                  Editing is restricted based on the campaign state.
-                </span>
-              )}
-              {canEditOrders && !isEditFormDirty && (
-                <span className="text-sm text-muted-foreground">
-                  Make a change to enable saving.
-                </span>
-              )}
-              {canEditOrders && (!editForm.pickupLocationId || editMealTotal === 0) && (
-                <span className="text-sm text-muted-foreground">
-                  Select a pickup location and enter at least one meal.
-                </span>
-              )}
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </AppShell>
   );
 }

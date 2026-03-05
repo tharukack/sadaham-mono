@@ -3,7 +3,7 @@ import { SmsStatus } from '@prisma/client';
 import { PrismaService } from '../common/utils/prisma.service';
 
 type OrdersTimelinePoint = { date: string; orders: number };
-type CustomerLite = { customerId: string; mobile: string; firstName: string; lastName: string };
+type CustomerLite = { customerId: string; mobile: string; name: string };
 type MealTotals = {
   chicken: number;
   fish: number;
@@ -79,6 +79,122 @@ export class StatsService {
       egg,
       other,
       totalMeals: chicken + fish + veg + egg + other,
+    };
+  }
+
+  async listMainCollectors() {
+    const ids = await this.prisma.user.findMany({
+      where: { mainCollectorId: { not: null } },
+      select: { mainCollectorId: true },
+      distinct: ['mainCollectorId'],
+    });
+    const collectorIds = ids.map((row) => row.mainCollectorId).filter(Boolean) as string[];
+    if (collectorIds.length === 0) return [];
+    return this.prisma.user.findMany({
+      where: { id: { in: collectorIds } },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  }
+
+  async mainCollectorCustomers(
+    mainCollectorId: string,
+    baselineCampaignId: string,
+    compareCampaignId?: string,
+  ) {
+    const collectorId = (mainCollectorId || '').trim();
+    const baselineId = (baselineCampaignId || '').trim();
+    const compareId = (compareCampaignId || baselineId).trim();
+    if (!collectorId) {
+      throw new BadRequestException('Main collector is required.');
+    }
+    if (!baselineId) {
+      throw new BadRequestException('Baseline campaign is required.');
+    }
+
+    const campaigns = await this.prisma.campaign.findMany({
+      where: { id: { in: [baselineId, compareId] } },
+      select: { id: true, name: true, state: true, startedAt: true, endedAt: true },
+    });
+    const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+    if (!campaignById.get(baselineId)) {
+      throw new BadRequestException('Baseline campaign not found.');
+    }
+    if (!campaignById.get(compareId)) {
+      throw new BadRequestException('Selected campaign not found.');
+    }
+
+    const customers = await this.prisma.customer.findMany({
+      where: {
+        OR: [
+          { createdById: collectorId },
+          { createdBy: { mainCollectorId: collectorId } },
+        ],
+      },
+      include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: [{ name: 'asc' }],
+    });
+
+    const customerIds = customers.map((customer) => customer.id);
+    const orders = customerIds.length
+      ? await this.prisma.order.findMany({
+          where: {
+            customerId: { in: customerIds },
+            campaignId: { in: [baselineId, compareId] },
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            customerId: true,
+            campaignId: true,
+            chickenQty: true,
+            fishQty: true,
+            vegQty: true,
+            eggQty: true,
+            otherQty: true,
+          },
+        })
+      : [];
+
+    const orderMap = new Map<string, MealTotals & { id: string }>();
+    orders.forEach((order) => {
+      orderMap.set(`${order.customerId}:${order.campaignId}`, {
+        id: order.id,
+        ...this.toMealTotals(order),
+      });
+    });
+
+    return {
+      mainCollector: await this.prisma.user.findUnique({
+        where: { id: collectorId },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+      baselineCampaign: campaignById.get(baselineId) || null,
+      compareCampaign: campaignById.get(compareId) || null,
+      customers: customers.map((customer) => {
+        const baseline = orderMap.get(`${customer.id}:${baselineId}`) || null;
+        const compare = orderMap.get(`${customer.id}:${compareId}`) || null;
+        return {
+          customerId: customer.id,
+          name: customer.name,
+          mobile: customer.mobile || '',
+          enteredBy: customer.createdBy
+            ? {
+                id: customer.createdBy.id,
+                firstName: customer.createdBy.firstName || '',
+                lastName: customer.createdBy.lastName || '',
+              }
+            : null,
+          baseline: {
+            hasOrder: !!baseline,
+            ...(baseline || { chicken: 0, fish: 0, veg: 0, egg: 0, other: 0, totalMeals: 0 }),
+          },
+          compare: {
+            hasOrder: !!compare,
+            ...(compare || { chicken: 0, fish: 0, veg: 0, egg: 0, other: 0, totalMeals: 0 }),
+          },
+        };
+      }),
     };
   }
 
@@ -530,7 +646,7 @@ export class StatsService {
         vegQty: true,
         eggQty: true,
         otherQty: true,
-        customer: { select: { id: true, mobile: true, firstName: true, lastName: true } },
+        customer: { select: { id: true, mobile: true, name: true } },
       },
     });
 
@@ -550,8 +666,7 @@ export class StatsService {
           customer: {
             customerId: order.customer.id,
             mobile: order.customer.mobile || '',
-            firstName: order.customer.firstName || '',
-            lastName: order.customer.lastName || '',
+            name: order.customer.name || '',
           },
           meals: this.toMealTotals(order),
         });
@@ -646,15 +761,13 @@ export class StatsService {
         const customer = (compareEntry || baselineEntry)?.customer || {
           customerId,
           mobile: '',
-          firstName: '',
-          lastName: '',
+          name: '',
         };
 
         return {
           customerId,
           mobile: customer.mobile,
-          firstName: customer.firstName,
-          lastName: customer.lastName,
+          name: customer.name,
           baseline: {
             hasOrder: !!baselineEntry,
             ...baselineMeals,

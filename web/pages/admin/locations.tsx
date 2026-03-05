@@ -38,9 +38,10 @@ export default function LocationsPage() {
   );
   const [locationsPage, setLocationsPage] = useState(1);
   const [locationsRowsPerPage, setLocationsRowsPerPage] = useState(10);
+  const [initialFormSnapshot, setInitialFormSnapshot] = useState<string>('');
   const { toast } = useToast();
 
-  const isAdmin = currentRole === 'ADMIN';
+  const isAdmin = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
   const isDistributorSearchMobile = !!distributorSearch.trim() && /\d/.test(distributorSearch);
   const isTransporterSearchMobile = !!transporterSearch.trim() && /\d/.test(transporterSearch);
 
@@ -110,7 +111,7 @@ export default function LocationsPage() {
 
   useEffect(() => {
     if (!editingLocation) return;
-    setForm({
+    const nextForm = {
       name: editingLocation.name || '',
       address: editingLocation.address || '',
       distributorName: editingLocation.distributorName || '',
@@ -126,9 +127,11 @@ export default function LocationsPage() {
       timeOfDispatch: editingLocation.timeOfDispatch || '',
       distributorCustomerId: editingLocation.distributorCustomerId || '',
       transporterCustomerId: editingLocation.transporterCustomerId || '',
-    });
+    };
+    setForm(nextForm);
+    setInitialFormSnapshot(JSON.stringify(nextForm));
     if (editingLocation.distributorCustomer) {
-      const fullName = `${editingLocation.distributorCustomer.firstName} ${editingLocation.distributorCustomer.lastName}`.trim();
+      const fullName = `${editingLocation.distributorCustomer.name || ''}`.trim();
       const mobile = editingLocation.distributorCustomer.mobile
         ? ` (${formatAuMobile(editingLocation.distributorCustomer.mobile)})`
         : '';
@@ -142,7 +145,7 @@ export default function LocationsPage() {
       setDistributorLabel('');
     }
     if (editingLocation.transporterCustomer) {
-      const fullName = `${editingLocation.transporterCustomer.firstName} ${editingLocation.transporterCustomer.lastName}`.trim();
+      const fullName = `${editingLocation.transporterCustomer.name || ''}`.trim();
       const mobile = editingLocation.transporterCustomer.mobile
         ? ` (${formatAuMobile(editingLocation.transporterCustomer.mobile)})`
         : '';
@@ -172,6 +175,7 @@ export default function LocationsPage() {
       distributorCustomerId: '',
       transporterCustomerId: '',
     });
+    setInitialFormSnapshot('');
     setEditingId(null);
     setShowForm(false);
     setDistributorSearch('');
@@ -197,6 +201,13 @@ export default function LocationsPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
+    if (editingId && initialFormSnapshot && JSON.stringify(form) === initialFormSnapshot) {
+      toast({
+        title: 'No changes to save',
+        description: 'Update a field before saving.',
+      });
+      return;
+    }
     setFormLoading(true);
     if (!form.distributorCustomerId) {
       toast({
@@ -251,7 +262,7 @@ export default function LocationsPage() {
     <AppShell title="Pickup Locations">
       <PageHeader title="Pickup Locations" description="Review pickup points and distributor assignments." />
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[85vw] max-w-[85vw] max-h-[85vh] overflow-y-auto sm:w-[80vw] sm:max-w-5xl md:w-[70vw] md:max-w-5xl lg:w-[60vw] lg:max-w-6xl">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Location' : 'Add Location'}</DialogTitle>
           </DialogHeader>
@@ -339,10 +350,10 @@ export default function LocationsPage() {
                             setForm({
                               ...form,
                               distributorCustomerId: c.id,
-                              distributorName: `${c.firstName} ${c.lastName}`.trim(),
+                              distributorName: `${c.name || ''}`.trim(),
                               distributorMobile: normalizeAuMobile(c.mobile || ''),
                             });
-                            const fullName = `${c.firstName} ${c.lastName}`.trim();
+                            const fullName = `${c.name || ''}`.trim();
                             const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
                             setDistributorLabel(`${fullName}${mobile}`);
                             setDistributorSearch('');
@@ -357,7 +368,7 @@ export default function LocationsPage() {
                                   : 'text-sm font-medium'
                               }
                             >
-                              {c.firstName} {c.lastName}
+                              {c.name}
                             </div>
                             <div
                               className={
@@ -404,7 +415,7 @@ export default function LocationsPage() {
                           className="w-full justify-start rounded-none"
                           onClick={() => {
                             setForm({ ...form, transporterCustomerId: c.id });
-                            const fullName = `${c.firstName} ${c.lastName}`.trim();
+                            const fullName = `${c.name || ''}`.trim();
                             const mobile = c.mobile ? ` (${formatAuMobile(c.mobile)})` : '';
                             setTransporterLabel(`${fullName}${mobile}`);
                             setTransporterSearch('');
@@ -419,7 +430,7 @@ export default function LocationsPage() {
                                   : 'text-sm font-medium'
                               }
                             >
-                              {c.firstName} {c.lastName}
+                              {c.name}
                             </div>
                             <div
                               className={
@@ -442,7 +453,14 @@ export default function LocationsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={!isAdmin || formLoading}>
+              <Button
+                type="submit"
+                disabled={
+                  !isAdmin ||
+                  formLoading ||
+                  (editingId && initialFormSnapshot && JSON.stringify(form) === initialFormSnapshot)
+                }
+              >
                 {formLoading ? 'Saving...' : 'Save Location'}
               </Button>
               <Button
@@ -502,7 +520,7 @@ export default function LocationsPage() {
                         {loc.distributorCustomer ? (
                           <>
                             <div className="text-sm font-medium">
-                              {`${loc.distributorCustomer.firstName} ${loc.distributorCustomer.lastName}`.trim()}
+                              {`${loc.distributorCustomer.name || ''}`.trim()}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {formatAuMobile(loc.distributorCustomer.mobile || '-') || '-'}
@@ -521,7 +539,7 @@ export default function LocationsPage() {
                         {loc.transporterCustomer ? (
                           <>
                             <div className="text-sm font-medium">
-                              {`${loc.transporterCustomer.firstName} ${loc.transporterCustomer.lastName}`.trim()}
+                              {`${loc.transporterCustomer.name || ''}`.trim()}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {formatAuMobile(loc.transporterCustomer.mobile || '-') || '-'}

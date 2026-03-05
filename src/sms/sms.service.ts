@@ -102,29 +102,35 @@ export class SmsService {
             orderId: dto.orderId,
             customerId: dto.customerId,
             batchId: dto.batchId,
-            status: this.bypass ? SmsStatus.SENT : SmsStatus.QUEUED,
+            status: SmsStatus.SENT,
             type: dto.type,
           },
         });
-        if (this.twilioClient) {
+        if (this.twilioClient && !this.bypass) {
           const toE164 = toE164AuMobile(normalizedTo);
-          const callbackBase = process.env.PUBLIC_URL || '';
-          const statusCallback = callbackBase
-            ? `${callbackBase.replace(/\/$/, '')}/sms/status-callback`
-            : undefined;
-          const response = await this.twilioClient.messages.create({
-            from: sender,
-            to: toE164,
-            body: dto.body,
-            statusCallback,
-          });
-          await this.prisma.smsMessage.update({
-            where: { id: message.id },
-            data: {
-              status: SmsStatus.SENT,
-              providerMessageId: response.sid,
-            },
-          });
+          try {
+            const response = await this.twilioClient.messages.create({
+              from: sender,
+              to: toE164,
+              body: dto.body,
+            });
+            await this.prisma.smsMessage.update({
+              where: { id: message.id },
+              data: {
+                status: SmsStatus.SENT,
+                providerMessageId: response.sid,
+                lastError: null,
+              },
+            });
+          } catch (err: any) {
+            await this.prisma.smsMessage.update({
+              where: { id: message.id },
+              data: {
+                status: SmsStatus.FAILED,
+                lastError: err?.message || 'SMS send failed.',
+              },
+            });
+          }
         }
         return normalizedTo;
       }),
@@ -267,27 +273,22 @@ export class SmsService {
     });
 
     if (eligibleOrders.length) {
-      const messages = eligibleOrders.map((order) => {
-        const normalizedTo = normalizeAuMobile(order.customer?.mobile || '') || order.customer?.mobile || '';
-        return {
-          batchId: batch.id,
+      for (const order of eligibleOrders) {
+        await this.send({
+          to: [order.customer?.mobile || ''],
+          body: interpolateOrderTemplate(template.body, order),
           campaignId: order.campaignId,
           orderId: order.id,
           customerId: order.customerId,
-          toMobile: normalizedTo,
-          body: interpolateOrderTemplate(template.body, order),
-          status: this.bypass ? SmsStatus.SENT : SmsStatus.QUEUED,
+          batchId: batch.id,
           type,
-        };
-      });
-      await this.prisma.smsMessage.createMany({ data: messages });
-      if (this.bypass) {
-        await this.prisma.smsBatch.update({
-          where: { id: batch.id },
-          data: { status: SmsBatchStatus.COMPLETED, completedAt: new Date() },
         });
       }
     }
+    await this.prisma.smsBatch.update({
+      where: { id: batch.id },
+      data: { status: SmsBatchStatus.COMPLETED, completedAt: new Date() },
+    });
 
     return this.buildBatchSummary(batch.id);
   }
@@ -309,36 +310,25 @@ export class SmsService {
   }
 
   private async sendMessageRecord(message: any) {
-    const toE164 = toE164AuMobile(message.toMobile);
-    const callbackBase = process.env.PUBLIC_URL || '';
-    const statusCallback = callbackBase
-      ? `${callbackBase.replace(/\/$/, '')}/sms/status-callback`
-      : undefined;
     await this.prisma.smsMessage.update({
       where: { id: message.id },
       data: {
-        status: this.bypass ? SmsStatus.SENT : SmsStatus.QUEUED,
+        status: SmsStatus.SENT,
         attemptCount: { increment: 1 },
         lastError: null,
       },
     });
 
-    if (!this.twilioClient) {
-      if (this.bypass) {
-        await this.prisma.smsMessage.update({
-          where: { id: message.id },
-          data: { status: SmsStatus.SENT },
-        });
-      }
+    if (!this.twilioClient || this.bypass) {
       return;
     }
 
+    const toE164 = toE164AuMobile(message.toMobile);
     try {
       const response = await this.twilioClient.messages.create({
         from: process.env.TWILIO_SENDER_ID,
         to: toE164,
         body: message.body,
-        statusCallback,
       });
       await this.prisma.smsMessage.update({
         where: { id: message.id },
@@ -363,29 +353,6 @@ export class SmsService {
     if (!batch) {
       throw new BadRequestException('SMS batch not found.');
     }
-    if (batch.status !== SmsBatchStatus.RUNNING) {
-      return this.buildBatchSummary(id);
-    }
-    const messages = await this.prisma.smsMessage.findMany({
-      where: { batchId: id, status: SmsStatus.QUEUED },
-      take: limit,
-      orderBy: { createdAt: 'asc' },
-    });
-    for (const message of messages) {
-      const latest = await this.prisma.smsBatch.findUnique({ where: { id } });
-      if (!latest || latest.status !== SmsBatchStatus.RUNNING) {
-        break;
-      }
-      await this.sendMessageRecord(message);
-    }
-
-    const summary = await this.buildBatchSummary(id);
-    if (summary && summary.counts.queued === 0 && batch.status === SmsBatchStatus.RUNNING) {
-      await this.prisma.smsBatch.update({
-        where: { id },
-        data: { status: SmsBatchStatus.COMPLETED, completedAt: new Date() },
-      });
-    }
     return this.buildBatchSummary(id);
   }
 
@@ -394,83 +361,60 @@ export class SmsService {
     if (!batch) {
       throw new BadRequestException('SMS batch not found.');
     }
-    await this.prisma.smsMessage.updateMany({
+    const failedMessages = await this.prisma.smsMessage.findMany({
       where: { batchId: id, status: SmsStatus.FAILED },
-      data: {
-        status: SmsStatus.QUEUED,
-        attemptCount: { increment: 1 },
-        lastError: null,
-      },
+      orderBy: { createdAt: 'asc' },
     });
+    for (const message of failedMessages) {
+      await this.sendMessageRecord(message);
+    }
     await this.prisma.smsBatch.update({
       where: { id },
-      data: { status: SmsBatchStatus.RUNNING, completedAt: null },
+      data: { status: SmsBatchStatus.COMPLETED, completedAt: new Date() },
     });
-    return this.processBatch(id, 10);
+    return this.buildBatchSummary(id);
   }
 
-  async handleStatusCallback(payload: Record<string, any>) {
-    const status = String(payload.MessageStatus || '').toLowerCase();
-    const sid = String(payload.MessageSid || '');
-    if (!sid) {
-      return { ok: true };
-    }
-
-    const mapped =
-      status === 'delivered'
-        ? SmsStatus.DELIVERED
-        : status === 'sent'
-        ? SmsStatus.SENT
-        : status === 'failed' || status === 'undelivered'
-        ? SmsStatus.FAILED
-        : status === 'queued' || status === 'accepted' || status === 'sending'
-        ? SmsStatus.QUEUED
-        : undefined;
-
-    if (!mapped) {
-      return { ok: true };
-    }
-
-    await this.prisma.smsMessage.updateMany({
-      where: { providerMessageId: sid },
-      data: { status: mapped },
-    });
-
+  async handleStatusCallback() {
     return { ok: true };
   }
 
   async retryMessage(id: string) {
     const message = await this.prisma.smsMessage.findUnique({ where: { id } });
     if (!message) return { ok: false };
-    const toE164 = toE164AuMobile(message.toMobile);
-    const callbackBase = process.env.PUBLIC_URL || '';
-    const statusCallback = callbackBase
-      ? `${callbackBase.replace(/\/$/, '')}/sms/status-callback`
-      : undefined;
-
     await this.prisma.smsMessage.update({
       where: { id: message.id },
       data: {
-        status: SmsStatus.QUEUED,
+        status: SmsStatus.SENT,
         attemptCount: { increment: 1 },
         lastError: null,
       },
     });
 
-    if (this.twilioClient) {
-      const response = await this.twilioClient.messages.create({
-        from: process.env.TWILIO_SENDER_ID,
-        to: toE164,
-        body: message.body,
-        statusCallback,
-      });
-      await this.prisma.smsMessage.update({
-        where: { id: message.id },
-        data: {
-          status: SmsStatus.SENT,
-          providerMessageId: response.sid,
-        },
-      });
+    if (this.twilioClient && !this.bypass) {
+      const toE164 = toE164AuMobile(message.toMobile);
+      try {
+        const response = await this.twilioClient.messages.create({
+          from: process.env.TWILIO_SENDER_ID,
+          to: toE164,
+          body: message.body,
+        });
+        await this.prisma.smsMessage.update({
+          where: { id: message.id },
+          data: {
+            status: SmsStatus.SENT,
+            providerMessageId: response.sid,
+          },
+        });
+      } catch (err: any) {
+        await this.prisma.smsMessage.update({
+          where: { id: message.id },
+          data: {
+            status: SmsStatus.FAILED,
+            lastError: err?.message || 'SMS send failed.',
+          },
+        });
+      }
     }
 
     return { ok: true };

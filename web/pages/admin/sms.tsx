@@ -74,11 +74,13 @@ const countSms = (text: string): SmsCount => {
 
 export default function SmsPage() {
   const queryClient = useQueryClient();
+  const [currentRole, setCurrentRole] = useState<string>('');
+  const isSuperAdmin = currentRole === 'SUPERADMIN';
   const { data, isLoading } = useQuery({
     queryKey: ['sms-templates'],
     queryFn: async () => (await api.get('/sms/templates')).data,
+    enabled: isSuperAdmin,
   });
-  const [currentRole, setCurrentRole] = useState<string>('');
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -91,19 +93,19 @@ export default function SmsPage() {
     () => [
       {
         name: 'Order Confirmation',
-        defaultBody: 'Hi {{firstName}}, your order is confirmed.',
+        defaultBody: 'Hi {{name}}, your order is confirmed.',
       },
       {
         name: 'Order Modified',
-        defaultBody: 'Hi {{firstName}}, your order has been updated.',
+        defaultBody: 'Hi {{name}}, your order has been updated.',
       },
       {
         name: 'Order Reminder',
-        defaultBody: 'Hi {{firstName}}, just a reminder about your order pickup.',
+        defaultBody: 'Hi {{name}}, just a reminder about your order pickup.',
       },
       {
         name: 'Thank You Note',
-        defaultBody: 'Hi {{firstName}}, thank you for your order!',
+        defaultBody: 'Hi {{name}}, thank you for your order!',
       },
     ],
     []
@@ -137,8 +139,6 @@ export default function SmsPage() {
     setForm(next);
   }, [templateOrder, templatesByName]);
 
-  const isAdmin = currentRole === 'ADMIN';
-
   const placeholderGroups = [
     {
       title: 'Variable',
@@ -156,8 +156,7 @@ export default function SmsPage() {
     {
       title: 'Other',
       items: [
-        { label: 'First Name', token: '{{firstName}}' },
-        { label: 'Last Name', token: '{{lastName}}' },
+        { label: 'Name', token: '{{name}}' },
         { label: 'Campaign Name', token: '{{campaignName}}' },
         { label: 'Event Date', token: '{{eventDate}}' },
         { label: 'Last Date For Changes', token: '{{lastDateForChanges}}' },
@@ -211,7 +210,7 @@ export default function SmsPage() {
 
   const saveTemplate = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) return;
+    if (!isSuperAdmin) return;
     if (!selectedName) return;
     const body = draftBody || '';
     if (!body.trim()) {
@@ -249,44 +248,52 @@ export default function SmsPage() {
         title="SMS Templates"
         description="Manage the core SMS messages used across campaigns."
       />
-      <Card>
-        <CardContent>
-          {isLoading ? (
-            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Loading templates...
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Template</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {templateOrder.map((tpl) => (
-                  <TableRow key={tpl.name}>
-                    <TableCell className="font-medium">{tpl.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {form[tpl.name] || tpl.defaultBody}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => openEditor(tpl.name)}
-                      >
-                        {isAdmin ? 'Edit' : 'View'}
-                      </Button>
-                    </TableCell>
+      {!isSuperAdmin ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            SMS templates are restricted to superadmins.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent>
+            {isLoading ? (
+              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Loading templates...
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Template</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {templateOrder.map((tpl) => (
+                    <TableRow key={tpl.name}>
+                      <TableCell className="font-medium">{tpl.name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {form[tpl.name] || tpl.defaultBody}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openEditor(tpl.name)}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <Dialog open={!!selectedName} onOpenChange={(open) => (!open ? closeEditor() : null)}>
         <DialogContent className="max-w-4xl lg:max-w-5xl xl:max-w-6xl h-[80vh] overflow-hidden">
           <DialogHeader>
@@ -302,7 +309,7 @@ export default function SmsPage() {
                     value={draftBody}
                     onChange={(e) => setDraftBody(e.target.value)}
                     className="min-h-0 flex-1 resize-none"
-                    disabled={!isAdmin}
+                    disabled={!isSuperAdmin}
                   />
                   <div className="text-xs text-muted-foreground">
                     Chars: {smsCount.characters} | Encoding: {smsCount.encoding} | Segments:{' '}
@@ -313,19 +320,19 @@ export default function SmsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="submit"
-                    disabled={!isAdmin || saving || draftBody === originalBody}
+                    disabled={!isSuperAdmin || saving || draftBody === originalBody}
                   >
                     {saving ? 'Saving...' : 'Save'}
                   </Button>
                   <Button type="button" variant="secondary" onClick={closeEditor}>
                     Close
                   </Button>
-                  {!isAdmin && (
+                  {!isSuperAdmin && (
                     <span className="text-xs text-muted-foreground">
-                      Only admins can edit SMS templates.
+                      Only superadmins can edit SMS templates.
                     </span>
                   )}
-                  {isAdmin && draftBody === originalBody && (
+                  {isSuperAdmin && draftBody === originalBody && (
                     <span className="text-xs text-muted-foreground">
                       Make a change to enable saving.
                     </span>
@@ -346,14 +353,14 @@ export default function SmsPage() {
                             key={token}
                             type="button"
                             onClick={() => insertPlaceholder(token)}
-                            disabled={!isAdmin}
+                            disabled={!isSuperAdmin}
                             className={cn(
                               badgeVariants({ variant: optional ? 'outline' : 'secondary' }),
                               'w-full justify-center gap-2 px-2 py-1 text-[11px] font-medium',
                               optional &&
                                 'border-amber-400/70 bg-amber-50/70 text-amber-700 hover:bg-amber-50',
                               !optional && 'hover:bg-secondary/70',
-                              !isAdmin && 'cursor-not-allowed opacity-60'
+                              !isSuperAdmin && 'cursor-not-allowed opacity-60'
                             )}
                           >
                             <span className="truncate">{label}</span>

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { normalizeAuMobile } from '../common/utils/phone';
 import { PrismaService } from '../common/utils/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -8,6 +8,7 @@ import { SmsService } from '../sms/sms.service';
 import { AuditService } from '../audit/audit.service';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -30,9 +31,12 @@ export class UsersService {
     return randomBytes(6).toString('base64url').slice(0, 8);
   }
 
-  async create(dto: CreateUserDto, actorUserId: string) {
+  async create(dto: CreateUserDto, actorUserId: string, actorRole?: Role) {
     if (!actorUserId) {
       throw new BadRequestException('Missing authenticated user.');
+    }
+    if (dto.role === Role.SUPERADMIN && actorRole !== Role.SUPERADMIN) {
+      throw new ForbiddenException('Only superadmins can create superadmins.');
     }
     const normalizedMobile = normalizeAuMobile(dto.mobile || '');
     if (normalizedMobile) {
@@ -44,22 +48,13 @@ export class UsersService {
         throw new BadRequestException('User already in the system.');
       }
     }
-    if (dto.email) {
-      const existingEmail = await this.prisma.user.findFirst({
-        where: { email: dto.email },
-        select: { id: true },
-      });
-      if (existingEmail) {
-        throw new BadRequestException('Email already in the system.');
-      }
-    }
     const tempPassword = this.generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const result = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
           firstName: dto.firstName,
-          lastName: dto.lastName,
+          lastName: dto.lastName ?? '',
           mobile: normalizedMobile || dto.mobile,
           email: dto.email,
           address: dto.address,
@@ -115,7 +110,17 @@ export class UsersService {
     return result;
   }
 
-  async update(id: string, dto: UpdateUserDto, actorUserId?: string) {
+  async update(id: string, dto: UpdateUserDto, actorUserId?: string, actorRole?: Role) {
+    const existingUser = await this.prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
+      throw new BadRequestException('User not found.');
+    }
+    if (existingUser.role === Role.SUPERADMIN && actorRole !== Role.SUPERADMIN) {
+      throw new ForbiddenException('Only superadmins can edit superadmin users.');
+    }
+    if (dto.role === Role.SUPERADMIN && actorRole !== Role.SUPERADMIN) {
+      throw new ForbiddenException('Only superadmins can assign the superadmin role.');
+    }
     const normalizedMobile = normalizeAuMobile(dto.mobile || '');
     if (normalizedMobile) {
       const existing = await this.prisma.user.findFirst({
@@ -124,15 +129,6 @@ export class UsersService {
       });
       if (existing) {
         throw new BadRequestException('User already in the system.');
-      }
-    }
-    if (dto.email) {
-      const existingEmail = await this.prisma.user.findFirst({
-        where: { email: dto.email, NOT: { id } },
-        select: { id: true },
-      });
-      if (existingEmail) {
-        throw new BadRequestException('Email already in the system.');
       }
     }
     const updated = await this.prisma.user.update({

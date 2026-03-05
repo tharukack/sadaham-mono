@@ -10,11 +10,7 @@ export class UpdateCustomerDto {
 
   @IsOptional()
   @IsString()
-  firstName?: string;
-
-  @IsOptional()
-  @IsString()
-  lastName?: string;
+  name?: string;
 
   @IsOptional()
   @IsString()

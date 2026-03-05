@@ -128,8 +128,7 @@ type StatsResponse = {
 type CustomerLite = {
   customerId: string;
   mobile: string;
-  firstName: string;
-  lastName: string;
+  name: string;
 };
 
 type CampaignCompareResponse = {
@@ -151,8 +150,7 @@ type CampaignCompareResponse = {
     rows: Array<{
       customerId: string;
       mobile: string;
-      firstName: string;
-      lastName: string;
+      name: string;
       baseline: {
         hasOrder: boolean;
         chicken: number;
@@ -197,6 +195,42 @@ type CampaignCompareResponse = {
   }>;
 };
 
+type MainCollector = {
+  id: string;
+  firstName: string;
+  lastName: string;
+};
+
+type MainCollectorCustomerResponse = {
+  mainCollector: MainCollector | null;
+  baselineCampaign: Campaign | null;
+  compareCampaign: Campaign | null;
+  customers: Array<{
+    customerId: string;
+    mobile: string;
+    name: string;
+    enteredBy: { id: string; firstName: string; lastName: string } | null;
+    baseline: {
+      hasOrder: boolean;
+      chicken: number;
+      fish: number;
+      veg: number;
+      egg: number;
+      other: number;
+      totalMeals: number;
+    };
+    compare: {
+      hasOrder: boolean;
+      chicken: number;
+      fish: number;
+      veg: number;
+      egg: number;
+      other: number;
+      totalMeals: number;
+    };
+  }>;
+};
+
 function formatDate(date?: string | null) {
   if (!date) return '-';
   const parsed = new Date(date);
@@ -213,8 +247,8 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat('en-AU').format(value || 0);
 }
 
-function formatName(customer: { firstName?: string; lastName?: string }) {
-  return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown';
+function formatName(customer: { name?: string }) {
+  return `${customer.name || ''}`.trim() || 'Unknown';
 }
 
 function downloadCsv(filename: string, rows: Array<Record<string, string | number>>) {
@@ -279,6 +313,9 @@ export default function StatsPage() {
       }
     >
   >({});
+  const [selectedCollectorId, setSelectedCollectorId] = useState('');
+  const [collectorCustomerSearch, setCollectorCustomerSearch] = useState('');
+  const isAdmin = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -295,19 +332,19 @@ export default function StatsPage() {
   const campaignsQuery = useQuery<Campaign[]>({
     queryKey: ['campaigns-all'],
     queryFn: async () => (await api.get('/campaigns')).data,
-    enabled: currentRole === 'ADMIN',
+    enabled: isAdmin,
   });
 
   const currentCampaignQuery = useQuery<Campaign | null>({
     queryKey: ['campaign-current'],
     queryFn: async () => (await api.get('/campaigns/current')).data,
-    enabled: currentRole === 'ADMIN',
+    enabled: isAdmin,
   });
 
   const lastEndedQuery = useQuery<Campaign | null>({
     queryKey: ['campaign-last-ended'],
     queryFn: async () => (await api.get('/campaigns/last-ended')).data,
-    enabled: currentRole === 'ADMIN' && currentCampaignQuery.isFetched && !currentCampaignQuery.data,
+    enabled: isAdmin && currentCampaignQuery.isFetched && !currentCampaignQuery.data,
   });
 
   useEffect(() => {
@@ -321,7 +358,7 @@ export default function StatsPage() {
   const statsQuery = useQuery<StatsResponse>({
     queryKey: ['stats-campaigns', appliedIds],
     queryFn: async () => (await api.post('/stats/campaigns', { campaignIds: appliedIds })).data,
-    enabled: currentRole === 'ADMIN' && appliedIds.length > 0,
+    enabled: isAdmin && appliedIds.length > 0,
   });
 
   const compareCampaignQuery = useQuery<CampaignCompareResponse>({
@@ -333,10 +370,28 @@ export default function StatsPage() {
           compareCampaignIds: appliedIds.slice(1),
         })
       ).data,
-    enabled: currentRole === 'ADMIN' && appliedIds.length >= 2,
+    enabled: isAdmin && appliedIds.length >= 2,
   });
 
-  const isAdmin = currentRole === 'ADMIN';
+  const mainCollectorsQuery = useQuery<MainCollector[]>({
+    queryKey: ['stats-main-collectors'],
+    queryFn: async () => (await api.get('/stats/main-collectors')).data,
+    enabled: isAdmin,
+  });
+
+  const mainCollectorCustomersQuery = useQuery<MainCollectorCustomerResponse>({
+    queryKey: ['stats-main-collector-customers', selectedCollectorId, appliedIds[0], appliedIds[1] || appliedIds[0]],
+    queryFn: async () =>
+      (
+        await api.post('/stats/main-collector-customers', {
+          mainCollectorId: selectedCollectorId,
+          baselineCampaignId: appliedIds[0],
+          compareCampaignId: appliedIds[1] || appliedIds[0],
+        })
+      ).data,
+    enabled: isAdmin && !!selectedCollectorId && appliedIds.length > 0,
+  });
+
   const campaigns = campaignsQuery.data || [];
   const stats = statsQuery.data;
   const combined = stats?.combined;
@@ -432,6 +487,8 @@ export default function StatsPage() {
   const isLoadingCompare = compareCampaignQuery.isLoading || compareCampaignQuery.isFetching;
   const comparePresence = compareData?.presenceDiff || [];
   const compareDeltas = compareData?.perCustomerDelta || [];
+  const mainCollectors = mainCollectorsQuery.data || [];
+  const mainCollectorCustomers = mainCollectorCustomersQuery.data;
 
   const defaultSelectionLabel = currentCampaignQuery.data
     ? 'Active campaign'
@@ -459,11 +516,25 @@ export default function StatsPage() {
     const needle = term.trim().toLowerCase();
     if (!needle) return customers;
     return customers.filter((customer) => {
-      const name = `${customer.firstName || ''} ${customer.lastName || ''}`.toLowerCase();
+      const name = `${customer.name || ''}`.toLowerCase();
       const mobile = customer.mobile || '';
       return name.includes(needle) || mobile.includes(needle);
     });
   };
+
+  const filteredCollectorCustomers = useMemo(() => {
+    const rows = mainCollectorCustomers?.customers || [];
+    const needle = collectorCustomerSearch.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((row) => {
+      const customerName = `${row.name || ''}`.toLowerCase();
+      const mobile = row.mobile || '';
+      const enteredBy = row.enteredBy
+        ? `${row.enteredBy.firstName || ''} ${row.enteredBy.lastName || ''}`.toLowerCase()
+        : '';
+      return customerName.includes(needle) || mobile.includes(needle) || enteredBy.includes(needle);
+    });
+  }, [collectorCustomerSearch, mainCollectorCustomers?.customers]);
 
   return (
     <AppShell title="Stats">
@@ -606,6 +677,7 @@ export default function StatsPage() {
                 <TabsTrigger value="pickup">Pickup Locations</TabsTrigger>
                 <TabsTrigger value="sms">SMS</TabsTrigger>
                 <TabsTrigger value="compare">Compare Campaigns</TabsTrigger>
+                <TabsTrigger value="main-collectors">Customers by Collector</TabsTrigger>
                 {selectedIds.length >= 2 ? (
                   <TabsTrigger value="compare-customers">Compare Customers</TabsTrigger>
                 ) : null}
@@ -1363,6 +1435,114 @@ export default function StatsPage() {
                 </Card>
               </TabsContent>
 
+              <TabsContent value="main-collectors" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Collector Customers</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Select value={selectedCollectorId} onValueChange={setSelectedCollectorId}>
+                        <SelectTrigger className="h-9 w-full sm:w-[260px]">
+                          <SelectValue placeholder="Select main collector" />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          {mainCollectors.length === 0 ? (
+                            <SelectItem value="none" disabled>
+                              No collectors found
+                            </SelectItem>
+                          ) : (
+                            mainCollectors.map((collector) => (
+                              <SelectItem key={collector.id} value={collector.id}>
+                                {`${collector.firstName || ''} ${collector.lastName || ''}`.trim() ||
+                                  'Unnamed'}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={collectorCustomerSearch}
+                        onChange={(event) => setCollectorCustomerSearch(event.target.value)}
+                        placeholder="Search customers or entered by"
+                        className="h-9 w-full sm:w-[240px]"
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        Baseline: {mainCollectorCustomers?.baselineCampaign?.name || '-'}
+                      </div>
+                    </div>
+                    {!selectedCollectorId ? (
+                      <div className="text-sm text-muted-foreground">Select a main collector.</div>
+                    ) : mainCollectorCustomersQuery.isLoading ? (
+                      <div className="text-sm text-muted-foreground">Loading collector customers...</div>
+                    ) : filteredCollectorCustomers.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No customers found.</div>
+                    ) : (
+                      <div className="w-full overflow-x-auto">
+                        <Table className="min-w-[1200px] whitespace-nowrap text-sm">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Customer</TableHead>
+                              <TableHead>Mobile</TableHead>
+                              <TableHead>Entered By</TableHead>
+                              <TableHead>Baseline Orders</TableHead>
+                              <TableHead>
+                                {mainCollectorCustomers?.compareCampaign?.name || 'Selected Campaign'}
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredCollectorCustomers.map((row) => {
+                              const baseline = row.baseline;
+                              const compare = row.compare;
+                              const baselineLabel = baseline.hasOrder
+                                ? `${formatNumber(baseline.totalMeals)} meals`
+                                : '-';
+                              const compareLabel = compare.hasOrder
+                                ? `${formatNumber(compare.totalMeals)} meals`
+                                : '-';
+                              return (
+                                <TableRow key={row.customerId}>
+                                  <TableCell className="font-medium">
+                                    {formatName(row)}
+                                  </TableCell>
+                                  <TableCell>{formatAuMobile(row.mobile || '')}</TableCell>
+                                  <TableCell>
+                                    {row.enteredBy
+                                      ? `${row.enteredBy.firstName || ''} ${row.enteredBy.lastName || ''}`.trim()
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <span>{baselineLabel}</span>
+                                      {baseline.hasOrder ? (
+                                        <span className="text-xs text-muted-foreground">
+                                          C{baseline.chicken} F{baseline.fish} V{baseline.veg} E{baseline.egg} O{baseline.other}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <span>{compareLabel}</span>
+                                      {compare.hasOrder ? (
+                                        <span className="text-xs text-muted-foreground">
+                                          C{compare.chicken} F{compare.fish} V{compare.veg} E{compare.egg} O{compare.other}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="compare-customers" className="space-y-6">
                 {selectedIds.length < 2 ? (
                   <Card>
@@ -1622,7 +1802,7 @@ export default function StatsPage() {
                               }
                               const term = filter.search.trim().toLowerCase();
                               if (!term) return true;
-                              const name = `${row.firstName || ''} ${row.lastName || ''}`.toLowerCase();
+                              const name = `${row.name || ''}`.toLowerCase();
                               return name.includes(term) || (row.mobile || '').includes(term);
                             });
                             const pageSize = filter.pageSize;
@@ -1814,7 +1994,7 @@ export default function StatsPage() {
                                       onClick={() => {
                                         const slug = toFileSlug(compareCampaign?.name || 'compare');
                                         const rows = delta.rows.map((row) => ({
-                                          name: `${row.firstName || ''} ${row.lastName || ''}`.trim(),
+                                          name: `${row.name || ''}`.trim(),
                                           mobile: formatAuMobile(row.mobile || ''),
                                           classification: row.classification,
                                           baselineTotalMeals: row.baseline.totalMeals,

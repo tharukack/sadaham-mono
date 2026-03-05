@@ -15,12 +15,8 @@ export const interpolateOrderTemplate = (body: string, order: any) => {
   };
   const totalOrders =
     mealCounts.chicken + mealCounts.fish + mealCounts.veg + mealCounts.egg + mealCounts.other;
-  const pickupByName = order.pickupByCustomer
-    ? `${order.pickupByCustomer.firstName || ''} ${order.pickupByCustomer.lastName || ''}`.trim()
-    : '';
-  const customerName = order.customer
-    ? `${order.customer.firstName || ''} ${order.customer.lastName || ''}`.trim()
-    : '';
+  const pickupByName = order.pickupByCustomer ? `${order.pickupByCustomer.name || ''}`.trim() : '';
+  const customerName = order.customer ? `${order.customer.name || ''}`.trim() : '';
   const createdByName = order.createdBy
     ? `${order.createdBy.firstName || ''} ${order.createdBy.lastName || ''}`.trim()
     : '';
@@ -47,8 +43,9 @@ export const interpolateOrderTemplate = (body: string, order: any) => {
     mealCounts.egg * mealCosts.egg +
     mealCounts.other * mealCosts.other;
   const replacements: Record<string, string> = {
-    '{{firstName}}': order.customer?.firstName || '',
-    '{{lastName}}': order.customer?.lastName || '',
+    '{{name}}': order.customer?.name || '',
+    '{{firstName}}': order.customer?.name || '',
+    '{{lastName}}': '',
     '{{pickupLocation}}': order.pickupLocation?.name || '',
     '{{pickupAddress}}': order.pickupLocation?.address || '',
     '{{distributorName}}': order.pickupLocation?.distributorName || '',

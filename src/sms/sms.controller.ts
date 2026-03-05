@@ -18,19 +18,19 @@ export class SmsController {
   constructor(private smsService: SmsService, private configService: ConfigService) {}
 
   @Get('templates')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERADMIN)
   listTemplates() {
     return this.smsService.listTemplates();
   }
 
   @Post('templates')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERADMIN)
   createTemplate(@Body() dto: CreateTemplateDto) {
     return this.smsService.createTemplate(dto);
   }
 
   @Patch('templates/:id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERADMIN)
   updateTemplate(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
     return this.smsService.updateTemplate(id, dto);
   }

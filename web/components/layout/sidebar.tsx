@@ -34,6 +34,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }, []);
 
   const navSections = useMemo(() => {
+    const isSuperAdmin = currentRole === 'SUPERADMIN';
     const isEditor = currentRole === 'EDITOR';
     const isViewer = currentRole === 'VIEWER';
     return [
@@ -61,8 +62,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/campaign', label: 'Campaigns', icon: ClipboardList },
           { href: '/stats', label: 'Stats', icon: BarChart3 },
-          { href: '/admin/sms', label: 'SMS Templates', icon: MessageSquare },
-          { href: '/admin/audit', label: 'Audit Log', icon: ShieldCheck },
+          ...(isSuperAdmin
+            ? [
+                { href: '/admin/sms', label: 'SMS Templates', icon: MessageSquare },
+                { href: '/admin/audit', label: 'Audit Log', icon: ShieldCheck },
+              ]
+            : []),
         ].filter((item) => {
           if (isViewer) return false;
           if (!isEditor) return true;
@@ -81,7 +86,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <aside className="flex h-full w-full flex-col gap-6 p-4">
       <div className="px-2">
-        <div className="text-lg font-semibold">Sadaham Admin</div>
+        <div className="text-lg font-semibold">Sadaham Sewana</div>
         <div className="text-xs text-muted-foreground">Order management console</div>
       </div>
       <div className="flex flex-1 flex-col gap-6">

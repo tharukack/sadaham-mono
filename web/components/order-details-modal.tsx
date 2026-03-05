@@ -92,19 +92,23 @@ export function OrderDetailsModal({
 
   const mealDetails = getMealDetails(order);
   const totalCost = getOrderCost(order);
-  const customerName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim();
+  const customerName = `${order.customer?.name || ''}`.trim();
   const pickupByName = order.pickupByCustomer
-    ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
+    ? `${order.pickupByCustomer.name || ''}`.trim()
     : customerName || '-';
   const campaignName = order.campaign?.name || campaignFallback?.name || 'Current Campaign';
   const campaignState = order.campaign?.state || campaignFallback?.state || '-';
   const createdByName = order.createdBy
     ? `${order.createdBy.firstName} ${order.createdBy.lastName}`.trim()
     : '-';
-  const mainCollectorName = order.createdBy?.mainCollector
-    ? `${order.createdBy.mainCollector.firstName || ''} ${order.createdBy.mainCollector.lastName || ''}`.trim()
+  const mainCollector =
+    order.createdBy?.mainCollector && order.createdBy.mainCollector.id !== order.createdBy.id
+      ? order.createdBy.mainCollector
+      : order.createdBy;
+  const mainCollectorName = mainCollector
+    ? `${mainCollector.firstName || ''} ${mainCollector.lastName || ''}`.trim()
     : '';
-  const mainCollectorLabel = mainCollectorName || createdByName || '-';
+  const mainCollectorLabel = mainCollectorName || '-';
   const [smsLocal, setSmsLocal] = useState<any[]>([]);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
 
@@ -130,19 +134,31 @@ export function OrderDetailsModal({
     };
   }, [open, order?.id]);
 
-  const latestConfirmation = smsLocal
-    .slice()
-    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
-  const confirmationStatus =
-    latestConfirmation?.status === 'FAILED'
-      ? 'failed'
-      : latestConfirmation?.status === 'QUEUED'
-      ? 'scheduled'
-      : latestConfirmation?.status
-      ? 'sent'
-      : 'not_sent';
+  const getLatestByType = (type: string) =>
+    smsLocal
+      .filter((msg: any) => msg.type === type)
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      )[0];
+
+  const latestConfirmation = getLatestByType('ORDER_CONFIRMATION');
+  const latestReminder = getLatestByType('ORDER_REMINDER');
+  const latestThankYou = getLatestByType('THANK_YOU');
+
+  const getRowStatus = (msg: any) =>
+    msg?.status === 'FAILED' ? 'failed' : msg?.status ? 'sent' : 'not_sent';
+  const confirmationStatus = getRowStatus(latestConfirmation);
+  const reminderStatus = getRowStatus(latestReminder);
+  const thankYouStatus = getRowStatus(latestThankYou);
+
   const confirmationTimestamp = latestConfirmation?.createdAt || null;
+  const reminderTimestamp = latestReminder?.createdAt || null;
+  const thankYouTimestamp = latestThankYou?.createdAt || null;
+
   const confirmationId = latestConfirmation?.id || null;
+  const reminderId = latestReminder?.id || null;
+  const thankYouId = latestThankYou?.id || null;
 
   const smsRows = [
     {
@@ -151,8 +167,18 @@ export function OrderDetailsModal({
       timestamp: confirmationTimestamp,
       messageId: confirmationId,
     },
-    { name: 'Order Reminder', status: 'not_sent', timestamp: null },
-    { name: 'Thank You', status: 'not_sent', timestamp: null },
+    {
+      name: 'Order Reminder',
+      status: reminderStatus,
+      timestamp: reminderTimestamp,
+      messageId: reminderId,
+    },
+    {
+      name: 'Thank You',
+      status: thankYouStatus,
+      timestamp: thankYouTimestamp,
+      messageId: thankYouId,
+    },
   ];
 
   const retrySms = async (messageId: string) => {

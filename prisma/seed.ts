@@ -171,7 +171,7 @@ async function main() {
         email: 'admin@example.com',
         firstName: 'Admin',
         lastName: 'User',
-        role: Role.ADMIN,
+        role: Role.SUPERADMIN,
         passwordHash,
       },
     }),
@@ -244,6 +244,7 @@ async function main() {
     Array.from({ length: 60 }).map((_, index) => {
       const firstName = pick(nameSeeds.first);
       const lastName = pick(nameSeeds.last);
+      const name = `${firstName} ${lastName}`.trim();
       const streetNo = 10 + Math.floor(rand() * 890);
       const street = pick(nameSeeds.streets);
       const suburb = pick(nameSeeds.suburbs);
@@ -252,8 +253,7 @@ async function main() {
         update: {},
         create: {
           mobile: `0420000${String(index).padStart(3, '0')}`,
-          firstName,
-          lastName,
+          name,
           address: `${streetNo} ${street}, ${suburb}`,
           createdById: admin.id,
           updatedById: admin.id,
@@ -286,14 +286,14 @@ async function main() {
   await prisma.smsTemplate.upsert({
     where: { name: 'Order Confirmation' },
     update: {},
-    create: { name: 'Order Confirmation', body: 'Hi {{firstName}}, your order is confirmed.' },
+    create: { name: 'Order Confirmation', body: 'Hi {{name}}, your order is confirmed.' },
   });
   await prisma.smsTemplate.upsert({
     where: { name: 'Order Reminder' },
     update: {},
     create: {
       name: 'Order Reminder',
-      body: 'Hi {{firstName}}, just a reminder about your order pickup.',
+      body: 'Hi {{name}}, just a reminder about your order pickup.',
     },
   });
   await prisma.smsTemplate.upsert({
@@ -301,7 +301,7 @@ async function main() {
     update: {},
     create: {
       name: 'Thank You Note',
-      body: 'Hi {{firstName}}, thank you for your order!',
+      body: 'Hi {{name}}, thank you for your order!',
     },
   });
 

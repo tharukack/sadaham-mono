@@ -40,7 +40,6 @@ import { KpiCards } from '../components/dashboard/kpi-cards';
 import { OrdersTrendChart } from '../components/dashboard/orders-trend-chart';
 import { MealTotalsChart } from '../components/dashboard/meal-totals-chart';
 import { PickupLocationsTable } from '../components/dashboard/pickup-locations-table';
-import { SmsSummary } from '../components/dashboard/sms-summary';
 import { formatAuMobile } from '../lib/phone';
 
 type Campaign = {
@@ -200,7 +199,7 @@ export default function Dashboard() {
       (showAddModal || showEditModal || addCustomerOpen || addPickupByOpen || editPickupByOpen),
   });
 
-  const isAdmin = currentRole === 'ADMIN';
+  const isAdmin = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
   const isEditor = currentRole === 'EDITOR';
   const isLoadingCampaigns = currentCampaignQuery.isLoading || lastEndedQuery.isLoading;
   const stats = statsQuery.data;
@@ -216,8 +215,8 @@ export default function Dashboard() {
     const next = [...orders];
     next.sort((a: any, b: any) => {
       if (ordersSortBy === 'name') {
-        const aName = `${a.customer?.firstName || ''} ${a.customer?.lastName || ''}`.trim();
-        const bName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.trim();
+        const aName = `${a.customer?.name || ''}`.trim();
+        const bName = `${b.customer?.name || ''}`.trim();
         return aName.localeCompare(bName);
       }
       const aDate = new Date(
@@ -445,8 +444,8 @@ export default function Dashboard() {
       setOrderForm(base);
       setPickupByLabel(
         existingOrderForCustomer.pickupByCustomer
-          ? `${existingOrderForCustomer.pickupByCustomer.firstName} ${existingOrderForCustomer.pickupByCustomer.lastName}`.trim()
-          : `${existingOrderForCustomer.customer?.firstName || ''} ${existingOrderForCustomer.customer?.lastName || ''}`.trim()
+          ? `${existingOrderForCustomer.pickupByCustomer.name || ''}`.trim()
+          : `${existingOrderForCustomer.customer?.name || ''}`.trim()
       );
     } else {
       const empty = {
@@ -471,8 +470,8 @@ export default function Dashboard() {
     setShowEditModal(true);
     setEditPickupByLabel(
       order.pickupByCustomer
-        ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
-        : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()
+        ? `${order.pickupByCustomer.name || ''}`.trim()
+        : `${order.customer?.name || ''}`.trim()
     );
     const base = {
       pickupLocationId: order.pickupLocationId || '',
@@ -678,7 +677,7 @@ export default function Dashboard() {
             className="h-auto w-full justify-between text-left whitespace-normal break-words"
             disabled={disabled}
           >
-            {selected ? `${selected.firstName} ${selected.lastName}`.trim() : 'Select customer'}
+            {selected ? `${selected.name || ''}`.trim() : 'Select customer'}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="p-0" align="start">
@@ -698,7 +697,7 @@ export default function Dashboard() {
                   {(allCustomersQuery.data || []).map((c: any) => (
                     <CommandItem
                       key={c.id}
-                      value={`${c.firstName} ${c.lastName} ${formatAuMobile(c.mobile || '')}`}
+                      value={`${c.name} ${formatAuMobile(c.mobile || '')}`}
                       onSelect={() => {
                         onChange(c.id);
                         onOpenChange(false);
@@ -710,7 +709,7 @@ export default function Dashboard() {
                             isMobileSearch ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
                           }
                         >
-                          {c.firstName} {c.lastName}
+                          {c.name}
                         </div>
                         <div
                           className={
@@ -777,11 +776,11 @@ export default function Dashboard() {
                   {(allCustomersQuery.data || []).map((c: any) => (
                     <CommandItem
                       key={c.id}
-                      value={`${c.firstName} ${c.lastName} ${formatAuMobile(c.mobile || '')}`}
+                      value={`${c.name} ${formatAuMobile(c.mobile || '')}`}
                       onSelect={() => {
                         onChange(c.id);
-                        setPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
-                        setEditPickupByLabel(`${c.firstName} ${c.lastName}`.trim());
+                        setPickupByLabel(`${c.name || ''}`.trim());
+                        setEditPickupByLabel(`${c.name || ''}`.trim());
                         onOpenChange(false);
                       }}
                     >
@@ -791,7 +790,7 @@ export default function Dashboard() {
                             isMobileSearch ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
                           }
                         >
-                          {c.firstName} {c.lastName}
+                          {c.name}
                         </div>
                         <div
                           className={
@@ -936,7 +935,7 @@ export default function Dashboard() {
                                       className="text-left text-foreground underline-offset-4 hover:underline"
                                       onClick={() => setDetailOrder(order)}
                                     >
-                                      {order.customer?.firstName} {order.customer?.lastName}
+                                      {order.customer?.name}
                                     </button>
                                   </TableCell>
                                   <TableCell>
@@ -944,8 +943,8 @@ export default function Dashboard() {
                                   </TableCell>
                                   <TableCell>
                                     {order.pickupByCustomer
-                                      ? `${order.pickupByCustomer.firstName} ${order.pickupByCustomer.lastName}`.trim()
-                                      : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim()}
+                                      ? `${order.pickupByCustomer.name || ''}`.trim()
+                                      : `${order.customer?.name || ''}`.trim()}
                                   </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-2 whitespace-nowrap">
@@ -1153,13 +1152,6 @@ export default function Dashboard() {
               rows={emptyOrders.byPickupLocation}
               totalOrders={emptyOrders.totalOrders}
             />
-            <SmsSummary
-              queued={emptySms.queued}
-              sent={emptySms.sent}
-              delivered={emptySms.delivered}
-              failed={emptySms.failed}
-              isAdmin={isAdmin}
-            />
           </TabsContent>
 
           <TabsContent value="details" className="space-y-6">
@@ -1185,31 +1177,6 @@ export default function Dashboard() {
                       <TableRow key={meal}>
                         <TableCell className="font-medium">{meal}</TableCell>
                         <TableCell>{total}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>SMS Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="w-full overflow-x-auto">
-                  <Table className="min-w-[360px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Count</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(emptySms).map(([status, count]) => (
-                      <TableRow key={status}>
-                        <TableCell className="font-medium">{status}</TableCell>
-                        <TableCell>{count}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1293,7 +1260,7 @@ export default function Dashboard() {
                 </div>
                 {selectedCustomer && (
                   <div className="text-sm text-muted-foreground">
-                    Selected: {selectedCustomer.firstName} {selectedCustomer.lastName}
+                    Selected: {selectedCustomer.name}
                   </div>
                 )}
                 {addExistingOrderId && (

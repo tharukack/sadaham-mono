@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
@@ -42,13 +42,13 @@ export class CampaignsController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(@Body() dto: CreateCampaignDto) {
-    return this.campaignsService.create(dto);
+  create(@Body() dto: CreateCampaignDto, @Req() req: any) {
+    return this.campaignsService.create(dto, req?.user?.id);
   }
 
   @Patch(':id')
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() dto: UpdateCampaignDto) {
-    return this.campaignsService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateCampaignDto, @Req() req: any) {
+    return this.campaignsService.update(id, dto, req?.user?.id);
   }
 }

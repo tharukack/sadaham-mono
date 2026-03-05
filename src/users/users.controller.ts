@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -27,14 +27,22 @@ export class UsersController {
   @Roles(Role.ADMIN)
   create(@Body() dto: CreateUserDto, @Req() req: any) {
     const actorUserId = req?.user?.id;
-    return this.usersService.create(dto, actorUserId);
+    const actorRole = req?.user?.role as Role | undefined;
+    if (dto.role === Role.SUPERADMIN && actorRole !== Role.SUPERADMIN) {
+      throw new ForbiddenException('Only superadmins can create superadmins.');
+    }
+    return this.usersService.create(dto, actorUserId, actorRole);
   }
 
   @Patch(':id')
   @Roles(Role.ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateUserDto, @Req() req: any) {
     const actorUserId = req?.user?.id;
-    return this.usersService.update(id, dto, actorUserId);
+    const actorRole = req?.user?.role as Role | undefined;
+    if (dto.role === Role.SUPERADMIN && actorRole !== Role.SUPERADMIN) {
+      throw new ForbiddenException('Only superadmins can assign the superadmin role.');
+    }
+    return this.usersService.update(id, dto, actorUserId, actorRole);
   }
 
   @Post(':id/reset-password')

@@ -8,10 +8,7 @@ export class CreateCustomerDto {
   mobile!: string;
 
   @IsString()
-  firstName!: string;
-
-  @IsString()
-  lastName!: string;
+  name!: string;
 
   @IsOptional()
   @IsString()

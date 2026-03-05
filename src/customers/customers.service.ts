@@ -3,10 +3,11 @@ import { PrismaService } from '../common/utils/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { normalizeAuMobile } from '../common/utils/phone';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   list() {
     return this.prisma.customer.findMany({
@@ -21,8 +22,7 @@ export class CustomersService {
       where: {
         ...(includeDeleted ? {} : { deletedAt: null }),
         OR: [
-          { firstName: { contains: term, mode: 'insensitive' } },
-          { lastName: { contains: term, mode: 'insensitive' } },
+          { name: { contains: term, mode: 'insensitive' } },
           { mobile: { contains: term } },
           ...(normalizedTerm && normalizedTerm !== term
             ? [{ mobile: { contains: normalizedTerm } }]
@@ -49,14 +49,32 @@ export class CustomersService {
           }
           throw new BadRequestException('Customer already in the system.');
         }
-        return this.prisma.customer.create({
-          data: { ...dto, mobile: normalizedMobile, createdById: userId, updatedById: userId },
-        });
+        return this.prisma.customer
+          .create({
+            data: { ...dto, mobile: normalizedMobile, createdById: userId, updatedById: userId },
+          })
+          .then(async (created) => {
+            await this.audit.log(userId, 'Customer', created.id, 'CUSTOMER_CREATED', {
+              name: created.name,
+              mobile: created.mobile,
+              address: created.address || null,
+            });
+            return created;
+          });
       });
     }
-    return this.prisma.customer.create({
-      data: { ...dto, createdById: userId, updatedById: userId },
-    });
+    return this.prisma.customer
+      .create({
+        data: { ...dto, createdById: userId, updatedById: userId },
+      })
+      .then(async (created) => {
+        await this.audit.log(userId, 'Customer', created.id, 'CUSTOMER_CREATED', {
+          name: created.name,
+          mobile: created.mobile,
+          address: created.address || null,
+        });
+        return created;
+      });
   }
 
   async update(id: string, dto: UpdateCustomerDto, userId: string) {
@@ -75,7 +93,7 @@ export class CustomersService {
         throw new BadRequestException('Customer already in the system.');
       }
     }
-    return this.prisma.customer.update({
+    const updated = await this.prisma.customer.update({
       where: { id },
       data: {
         ...dto,
@@ -83,19 +101,29 @@ export class CustomersService {
         updatedById: userId,
       },
     });
+    await this.audit.log(userId, 'Customer', updated.id, 'CUSTOMER_UPDATED', {
+      name: updated.name,
+      mobile: updated.mobile,
+      address: updated.address || null,
+    });
+    return updated;
   }
 
-  softDelete(id: string, userId: string) {
-    return this.prisma.customer.update({
+  async softDelete(id: string, userId: string) {
+    const deleted = await this.prisma.customer.update({
       where: { id },
       data: { deletedAt: new Date(), updatedById: userId },
     });
+    await this.audit.log(userId, 'Customer', deleted.id, 'CUSTOMER_DELETED', {});
+    return deleted;
   }
 
-  restore(id: string, userId: string) {
-    return this.prisma.customer.update({
+  async restore(id: string, userId: string) {
+    const restored = await this.prisma.customer.update({
       where: { id },
       data: { deletedAt: null, updatedById: userId },
     });
+    await this.audit.log(userId, 'Customer', restored.id, 'CUSTOMER_RESTORED', {});
+    return restored;
   }
 }
