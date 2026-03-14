@@ -375,10 +375,6 @@ export class SmsService {
     return this.buildBatchSummary(id);
   }
 
-  async handleStatusCallback() {
-    return { ok: true };
-  }
-
   async retryMessage(id: string) {
     const message = await this.prisma.smsMessage.findUnique({ where: { id } });
     if (!message) return { ok: false };

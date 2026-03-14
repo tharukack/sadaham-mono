@@ -7,15 +7,13 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { Request } from 'express';
-import twilio from 'twilio';
-import { ConfigService } from '@nestjs/config';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
 
 @Controller('sms')
 @UseGuards(RolesGuard)
 export class SmsController {
-  constructor(private smsService: SmsService, private configService: ConfigService) {}
+  constructor(private smsService: SmsService) {}
 
   @Get('templates')
   @Roles(Role.SUPERADMIN)
@@ -86,21 +84,6 @@ export class SmsController {
   @Roles(Role.ADMIN)
   retryFailed(@Param('id') id: string) {
     return this.smsService.retryFailedBatch(id);
-  }
-
-  @Post('status-callback')
-  async statusCallback(@Req() req: Request, @Body() body: Record<string, any>) {
-    const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN') || '';
-    const publicUrl = this.configService.get<string>('PUBLIC_URL') || '';
-    if (authToken && publicUrl) {
-      const signature = String(req.headers['x-twilio-signature'] || '');
-      const url = `${publicUrl.replace(/\/$/, '')}/sms/status-callback`;
-      const isValid = twilio.validateRequest(authToken, signature, url, body);
-      if (!isValid) {
-        return { ok: false };
-      }
-    }
-    return this.smsService.handleStatusCallback(body);
   }
 
   @Post('retry/:id')
