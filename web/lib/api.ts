@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuthCookie } from './auth-cookie';
 
 const defaultApiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const defaultApiUrl = `http://${defaultApiHost}:4000`;
@@ -33,8 +34,9 @@ api.interceptors.response.use(
         localStorage.removeItem('user');
         localStorage.removeItem('otpToken');
         localStorage.removeItem('otpMobile');
-        if (window.location.pathname !== '/login') {
-          window.location.assign('/login');
+        clearAuthCookie();
+        if (window.location.pathname !== '/404') {
+          window.location.assign('/404');
         }
       }
     }

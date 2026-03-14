@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { api } from '../lib/api';
+import { getAuthCookie, setAuthCookie } from '../lib/auth-cookie';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -13,12 +14,19 @@ export default function OtpPage() {
   const [otpToken, setOtpToken] = useState('');
   const router = useRouter();
   const { toast } = useToast();
+  const [checkedSession, setCheckedSession] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const token = localStorage.getItem('token') || getAuthCookie();
+    if (token) {
+      router.replace('/dashboard');
+      return;
+    }
     const stored = localStorage.getItem('otpToken');
     if (stored) setOtpToken(stored);
-  }, []);
+    setCheckedSession(true);
+  }, [router]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,6 +38,7 @@ export default function OtpPage() {
       const { accessToken, redirect, user, mustChangePassword } = res.data;
       if (accessToken) {
         localStorage.setItem('token', accessToken);
+        setAuthCookie(accessToken);
       }
       if (user) {
         localStorage.setItem('user', JSON.stringify(user));
@@ -49,6 +58,16 @@ export default function OtpPage() {
       });
     }
   };
+
+  if (!checkedSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <div className="text-center text-sm uppercase tracking-[0.35em] text-slate-300">
+          Redirecting
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-900">

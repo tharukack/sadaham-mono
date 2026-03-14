@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
 import { Sidebar } from './sidebar';
 import { api } from '../../lib/api';
+import { clearAuthCookie } from '../../lib/auth-cookie';
 
 export function Topbar({ title }: { title: string }) {
   const router = useRouter();
@@ -54,6 +55,7 @@ export function Topbar({ title }: { title: string }) {
     localStorage.removeItem('user');
     localStorage.removeItem('otpToken');
     localStorage.removeItem('otpMobile');
+    clearAuthCookie();
     router.push('/login');
   };
 

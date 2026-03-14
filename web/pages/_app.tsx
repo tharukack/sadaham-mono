@@ -11,7 +11,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   const [client] = useState(() => new QueryClient());
   const router = useRouter();
   const publicRoutes = useMemo(
-    () => new Set(['/', '/login', '/otp', '/change-password']),
+    () => new Set(['/', '/login', '/otp', '/change-password', '/404']),
     [],
   );
   const [authChecked, setAuthChecked] = useState(false);
@@ -22,8 +22,8 @@ export default function MyApp({ Component, pageProps }: AppProps) {
       const token = localStorage.getItem('token');
       const isPublic = publicRoutes.has(router.pathname);
       if (!token && !isPublic) {
-        if (router.pathname !== '/login') {
-          router.replace('/login');
+        if (router.pathname !== '/404') {
+          router.replace('/404');
         }
         setAuthChecked(true);
         return;
@@ -34,7 +34,17 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   }, [publicRoutes, router]);
 
   if (typeof window !== 'undefined' && !authChecked && !publicRoutes.has(router.pathname)) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+        <div className="max-w-md text-center">
+          <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">Redirecting</p>
+          <h1 className="mt-4 text-2xl font-semibold text-foreground">Checking access</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Please wait while we verify your session.
+          </p>
+        </div>
+      </div>
+    );
   }
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
