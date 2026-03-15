@@ -1,8 +1,4 @@
-{
-  email {$ACME_EMAIL}
-}
-
-{$DOMAIN} {
+http://localhost {
   encode gzip
 
   handle_path /api/* {
@@ -11,10 +7,5 @@
 
   handle {
     reverse_proxy web:3000
-  }
-
-  log {
-    output stdout
-    format console
   }
 }

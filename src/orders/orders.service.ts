@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/utils/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -9,6 +9,8 @@ import { interpolateOrderTemplate } from '../sms/sms.utils';
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private prisma: PrismaService,
     private smsService: SmsService,
@@ -17,13 +19,23 @@ export class OrdersService {
 
   private async sendOrderConfirmation(order: any) {
     const enabled = await this.smsService.getCustomerMessagesEnabled();
-    if (!enabled) return;
+    if (!enabled) {
+      this.logger.log(`Skipping order confirmation SMS for order ${order?.id}: customer messages disabled`);
+      return;
+    }
     const mobile = order?.customer?.mobile;
-    if (!mobile) return;
+    if (!mobile) {
+      this.logger.warn(`Skipping order confirmation SMS for order ${order?.id}: missing customer mobile`);
+      return;
+    }
     const template = await this.smsService.getTemplateByName('Order Confirmation');
-    if (!template?.body) return;
+    if (!template?.body) {
+      this.logger.warn(`Skipping order confirmation SMS for order ${order?.id}: missing template body`);
+      return;
+    }
     const body = interpolateOrderTemplate(template.body, order);
     try {
+      this.logger.log(`Sending order confirmation SMS for order ${order.id} to ${mobile}`);
       await this.smsService.send({
         body,
         to: [mobile],
@@ -32,24 +44,34 @@ export class OrdersService {
         customerId: order.customerId,
         type: SmsMessageType.ORDER_CONFIRMATION,
       });
+      this.logger.log(`Order confirmation SMS queued for order ${order.id}`);
       return;
     } catch (err: any) {
       const message = err?.message || 'SMS send failed.';
-      // Do not fail order creation if SMS fails.
-      console.warn('[SMS] Order confirmation failed:', message);
+      this.logger.error(`Order confirmation SMS failed for order ${order?.id}: ${message}`);
       return message;
     }
   }
 
   private async sendOrderModified(order: any) {
     const enabled = await this.smsService.getCustomerMessagesEnabled();
-    if (!enabled) return;
+    if (!enabled) {
+      this.logger.log(`Skipping order modified SMS for order ${order?.id}: customer messages disabled`);
+      return;
+    }
     const mobile = order?.customer?.mobile;
-    if (!mobile) return;
+    if (!mobile) {
+      this.logger.warn(`Skipping order modified SMS for order ${order?.id}: missing customer mobile`);
+      return;
+    }
     const template = await this.smsService.getTemplateByName('Order Modified');
-    if (!template?.body) return;
+    if (!template?.body) {
+      this.logger.warn(`Skipping order modified SMS for order ${order?.id}: missing template body`);
+      return;
+    }
     const body = interpolateOrderTemplate(template.body, order);
     try {
+      this.logger.log(`Sending order modified SMS for order ${order.id} to ${mobile}`);
       await this.smsService.send({
         body,
         to: [mobile],
@@ -58,11 +80,11 @@ export class OrdersService {
         customerId: order.customerId,
         type: SmsMessageType.ORDER_MODIFIED,
       });
+      this.logger.log(`Order modified SMS queued for order ${order.id}`);
       return;
     } catch (err: any) {
       const message = err?.message || 'SMS send failed.';
-      // Do not fail order updates if SMS fails.
-      console.warn('[SMS] Order modified failed:', message);
+      this.logger.error(`Order modified SMS failed for order ${order?.id}: ${message}`);
       return message;
     }
   }

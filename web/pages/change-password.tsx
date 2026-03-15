@@ -8,6 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
 import { KeyRound } from 'lucide-react';
+import { getStoredUser } from '../lib/session';
 
 export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -20,7 +21,12 @@ export default function ChangePasswordPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token') || getAuthCookie();
-    if (token) {
+    const user = getStoredUser();
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    if (!user?.mustChangePassword) {
       router.replace('/dashboard');
       return;
     }
@@ -36,6 +42,13 @@ export default function ChangePasswordPage() {
       if (accessToken) {
         localStorage.setItem('token', accessToken);
         setAuthCookie(accessToken);
+      }
+      const currentUser = getStoredUser();
+      if (currentUser) {
+        localStorage.setItem(
+          'user',
+          JSON.stringify({ ...currentUser, mustChangePassword: false }),
+        );
       }
       toast({ title: 'Password updated' });
       router.push('/dashboard');

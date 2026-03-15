@@ -9,6 +9,7 @@ import { useToast } from '../components/ui/use-toast';
 import { normalizeAuMobile } from '../lib/phone';
 import { LogIn } from 'lucide-react';
 import { getAuthCookie } from '../lib/auth-cookie';
+import { getPostLoginRoute } from '../lib/session';
 
 export default function LoginPage() {
   const [mobile, setMobile] = useState('');
@@ -21,7 +22,7 @@ export default function LoginPage() {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token') || getAuthCookie();
     if (token) {
-      router.replace('/dashboard');
+      router.replace(getPostLoginRoute());
       return;
     }
     setCheckedSession(true);

@@ -39,8 +39,6 @@ services:
         condition: service_healthy
     expose:
       - "4000"
-    ports:
-    - "4000:4000"
     restart: unless-stopped
 
   web:
@@ -56,26 +54,24 @@ services:
       - api
     expose:
       - "3000"
-    ports:
-    - "3000:3000"
     restart: unless-stopped
 
-  # caddy:
-  #   image: caddy:2.8-alpine
-  #   environment:
-  #     DOMAIN: ${DOMAIN}
-  #     ACME_EMAIL: ${ACME_EMAIL}
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
-  #     - caddy_data:/data
-  #     - caddy_config:/config
-  #   depends_on:
-  #     - web
-  #     - api
-  #   restart: unless-stopped
+  caddy:
+    image: caddy:2.8-alpine
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
 
 volumes:
   postgres_data:

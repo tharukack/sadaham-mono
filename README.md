@@ -129,3 +129,8 @@ This will recreate schema and data from the plain SQL dump.
 docker compose --env-file .env.production up --build 
 
 docker compose --env-file .env.production exec api npx prisma migrate deploy
+
+docker compose --env-file .env.production exec api npx prisma db seed
+
+docker compose --env-file .env.production exec api node prisma/import-customers.js
+

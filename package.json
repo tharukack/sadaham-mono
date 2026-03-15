@@ -13,7 +13,8 @@
     "lint": "echo 'linting not configured'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "import:customers": "node prisma/import-customers.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

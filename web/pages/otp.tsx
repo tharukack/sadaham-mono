@@ -8,6 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
 import { ShieldCheck } from 'lucide-react';
+import { getPostLoginRoute } from '../lib/session';
 
 export default function OtpPage() {
   const [code, setCode] = useState('');
@@ -20,7 +21,7 @@ export default function OtpPage() {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token') || getAuthCookie();
     if (token) {
-      router.replace('/dashboard');
+      router.replace(getPostLoginRoute());
       return;
     }
     const stored = localStorage.getItem('otpToken');
@@ -41,7 +42,10 @@ export default function OtpPage() {
         setAuthCookie(accessToken);
       }
       if (user) {
-        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem(
+          'user',
+          JSON.stringify({ ...user, mustChangePassword: Boolean(mustChangePassword) }),
+        );
       }
       localStorage.removeItem('otpToken');
       localStorage.removeItem('otpMobile');

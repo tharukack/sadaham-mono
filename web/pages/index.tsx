@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { LogIn } from 'lucide-react';
 import { getAuthCookie } from '../lib/auth-cookie';
+import { getPostLoginRoute } from '../lib/session';
 
 export default function Home() {
   const router = useRouter();
@@ -14,7 +15,7 @@ export default function Home() {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('token') || getAuthCookie();
     if (token) {
-      router.replace('/dashboard');
+      router.replace(getPostLoginRoute());
       return;
     }
     setCheckedSession(true);
