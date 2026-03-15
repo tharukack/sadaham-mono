@@ -119,6 +119,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </div>
+      <div className="space-y-3 px-2 pt-2">
+        <Separator />
+        <div className="rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Built with ❤️ by{' '}
+          <a
+            href="https://www.linkedin.com/in/tharuka-chathura/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
+            Tharuka
+          </a>
+          .
+        </div>
+      </div>
     </aside>
   );
 }

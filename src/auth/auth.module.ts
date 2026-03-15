@@ -5,9 +5,10 @@ import { AuthController } from './auth.controller';
 import { PrismaModule } from '../common/utils/prisma.module';
 import { SmsModule } from '../sms/sms.module';
 import { AuditModule } from '../audit/audit.module';
+import { SecurityModule } from '../common/security/security.module';
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({}), SmsModule, AuditModule],
+  imports: [PrismaModule, JwtModule.register({}), SmsModule, AuditModule, SecurityModule],
   controllers: [AuthController],
   providers: [AuthService],
   exports: [AuthService],

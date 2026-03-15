@@ -45,9 +45,7 @@ export class AuthMiddleware implements NestMiddleware {
                 rawPath === '/logout' ||
                 rawPath.endsWith('/auth/logout') ||
                 rawPath.endsWith('/logout');
-              const isBypassAdmin =
-                user.mobile === '0400000001' && user.role === 'ADMIN';
-              if (!user.mustChangePassword || isChangePasswordRoute || isLogoutRoute || isBypassAdmin) {
+              if (!user.mustChangePassword || isChangePasswordRoute || isLogoutRoute) {
                 // Attach authenticated user to request for downstream guards/controllers
                 (req as any).user = user;
                 (req as any).sessionId = payload.sessionId;
