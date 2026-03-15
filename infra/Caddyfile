@@ -1,4 +1,4 @@
-http://localhost {
+{$SITE_ADDRESS} {
   encode gzip
 
   handle_path /api/* {
@@ -7,5 +7,10 @@ http://localhost {
 
   handle {
     reverse_proxy web:3000
+  }
+
+  log {
+    output stdout
+    format console
   }
 }
