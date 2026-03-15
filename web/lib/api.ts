@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 import { clearAuthCookie } from './auth-cookie';
 
 const defaultApiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
@@ -13,10 +13,9 @@ api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
-      };
+      const headers = AxiosHeaders.from(config.headers || {});
+      headers.set('Authorization', `Bearer ${token}`);
+      config.headers = headers;
     }
   }
   return config;

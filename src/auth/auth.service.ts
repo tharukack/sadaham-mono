@@ -26,22 +26,6 @@ export class AuthService {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const bypassMobile = '0400000001';
-    const bypassPassword = '1234';
-    const isBypassAdmin =
-      dto.mobile === bypassMobile &&
-      dto.password === bypassPassword &&
-      (user.role === 'ADMIN' || user.role === 'SUPERADMIN');
-    if (isBypassAdmin) {
-      return {
-        message: 'OTP bypass enabled for testing',
-        code: '123456',
-        expiresAt: addMinutes(new Date(), 5),
-        otpToken: `bypass-${user.id}`,
-        next: 'VERIFY_OTP',
-        bypass: true,
-      };
-    }
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -51,9 +35,6 @@ export class AuthService {
     const otp = await this.prisma.otpCode.create({
       data: { userId: user.id, code: otpCode, expiresAt },
     });
-    if (this.config.get<string>('TWILIO_BYPASS') === 'true') {
-      return { message: 'OTP bypass enabled for testing', code: otpCode, expiresAt, otpToken: otp.id, next: 'VERIFY_OTP' };
-    }
     await this.sms.send({
       to: [user.mobile],
       body: `Your verification code is ${otpCode}. It expires in 5 minutes.`,
@@ -62,52 +43,6 @@ export class AuthService {
   }
 
   async verify(dto: VerifyOtpDto) {
-    const bypassMobile = '0400000001';
-    const bypassCode = '123456';
-    if (dto.otpToken?.startsWith('bypass-') && dto.code === bypassCode) {
-      const userId = dto.otpToken.replace('bypass-', '');
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (
-        !user ||
-        !user.isActive ||
-        user.mobile !== bypassMobile ||
-        (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN')
-      ) {
-        throw new UnauthorizedException('Invalid OTP');
-      }
-      await this.prisma.userSession.updateMany({
-        where: { userId: user.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      const session = await this.prisma.userSession.create({
-        data: { userId: user.id },
-      });
-      const accessToken = await this.jwt.signAsync(
-        { sub: user.id, role: user.role, sessionId: session.id, mustChangePassword: false },
-        { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '12h' },
-      );
-      const userSummary = {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        mobile: user.mobile,
-        email: user.email,
-        address: user.address,
-        role: user.role,
-        isActive: user.isActive,
-        mainCollectorId: user.mainCollectorId,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      };
-      return {
-        accessToken,
-        sessionId: session.id,
-        user: userSummary,
-        mustChangePassword: false,
-        redirect: '/dashboard',
-        bypass: true,
-      };
-    }
     const activeOtp = await this.prisma.otpCode.findFirst({
       where: { id: dto.otpToken, consumedAt: null },
       include: { user: true },

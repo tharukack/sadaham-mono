@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+.env
+.env.*
+npm-debug.log*
+pnpm-debug.log*

@@ -53,8 +53,6 @@ if [[ -e "$sql_file" || -e "$gz_file" ]]; then
 fi
 
 log "Starting PostgreSQL backup for database: $PGDATABASE"
-
-# Create a plain SQL dump using libpq environment variables.
 pg_dump --format=plain --no-owner --no-privileges --file "$sql_file"
 
 log "Compressing backup: $gz_file"

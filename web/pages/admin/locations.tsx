@@ -458,7 +458,9 @@ export default function LocationsPage() {
                 disabled={
                   !isAdmin ||
                   formLoading ||
-                  (editingId && initialFormSnapshot && JSON.stringify(form) === initialFormSnapshot)
+                  (Boolean(editingId) &&
+                    Boolean(initialFormSnapshot) &&
+                    JSON.stringify(form) === initialFormSnapshot)
                 }
               >
                 {formLoading ? 'Saving...' : 'Save Location'}

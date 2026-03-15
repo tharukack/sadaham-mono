@@ -30,3 +30,4 @@ web/.next/**
 Thumbs.db
 .idea/
 .vscode/
+*.pnpm-store

@@ -11,8 +11,8 @@ import { interpolateOrderTemplate } from './sms.utils';
 
 @Injectable()
 export class SmsService {
-  private twilioClient: twilio.Twilio;
-  private bypass: boolean;
+  private twilioClient?: twilio.Twilio;
+  private readonly customerMessagesKey = 'customer_messages_enabled';
   private workerEnabled: boolean;
   private workerIntervalMs: number;
   private workerLimit: number;
@@ -20,13 +20,12 @@ export class SmsService {
   private workerRunning = false;
 
   constructor(private prisma: PrismaService, config: ConfigService) {
-    this.bypass = config.get<string>('TWILIO_BYPASS') === 'true';
     this.workerEnabled = config.get<string>('SMS_BATCH_WORKER') !== 'false';
     this.workerIntervalMs = Number(config.get<string>('SMS_BATCH_WORKER_INTERVAL_MS') || 5000);
     this.workerLimit = Number(config.get<string>('SMS_BATCH_WORKER_LIMIT') || 10);
     const accountSid = config.get<string>('TWILIO_ACCOUNT_SID') || '';
     const authToken = config.get<string>('TWILIO_AUTH_TOKEN') || '';
-    if (accountSid && authToken && !this.bypass) {
+    if (accountSid && authToken) {
       this.twilioClient = twilio(accountSid, authToken);
     }
   }
@@ -106,7 +105,7 @@ export class SmsService {
             type: dto.type,
           },
         });
-        if (this.twilioClient && !this.bypass) {
+        if (this.twilioClient) {
           const toE164 = toE164AuMobile(normalizedTo);
           try {
             const response = await this.twilioClient.messages.create({
@@ -138,11 +137,27 @@ export class SmsService {
     return { sent: messages.length };
   }
 
+  async getCustomerMessagesEnabled() {
+    const setting = await this.prisma.appSetting.findUnique({
+      where: { key: this.customerMessagesKey },
+    });
+    if (!setting) return true;
+    return setting.value === 'true';
+  }
+
+  async setCustomerMessagesEnabled(enabled: boolean) {
+    return this.prisma.appSetting.upsert({
+      where: { key: this.customerMessagesKey },
+      update: { value: enabled ? 'true' : 'false' },
+      create: { key: this.customerMessagesKey, value: enabled ? 'true' : 'false' },
+    });
+  }
+
   private mapTypeToTemplateName(type: SmsMessageType) {
-    if (type === SmsMessageType.ORDER_REMINDER) return 'Order Reminder';
-    if (type === SmsMessageType.THANK_YOU) return 'Thank You Note';
-    if (type === SmsMessageType.ORDER_CONFIRMATION) return 'Order Confirmation';
-    if (type === SmsMessageType.ORDER_MODIFIED) return 'Order Modified';
+    if (type === 'ORDER_REMINDER') return 'Order Reminder';
+    if (type === 'THANK_YOU') return 'Thank You Note';
+    if (type === 'ORDER_CONFIRMATION') return 'Order Confirmation';
+    if (type === 'ORDER_MODIFIED') return 'Order Modified';
     return '';
   }
 
@@ -213,16 +228,17 @@ export class SmsService {
   }
 
   async createBatch(campaignId: string, type: SmsMessageType, userId?: string) {
-    if (![SmsMessageType.ORDER_REMINDER, SmsMessageType.THANK_YOU].includes(type)) {
+    if (type !== 'ORDER_REMINDER' && type !== 'THANK_YOU') {
       throw new BadRequestException('Unsupported SMS batch type.');
     }
+    const batchType = type as 'ORDER_REMINDER' | 'THANK_YOU';
     const existing = await this.prisma.smsBatch.findUnique({
-      where: { campaignId_type: { campaignId, type } },
+      where: { campaignId_type: { campaignId, type: batchType } },
     });
     if (existing) {
       return this.buildBatchSummary(existing.id);
     }
-    const templateName = this.mapTypeToTemplateName(type);
+    const templateName = this.mapTypeToTemplateName(batchType);
     const template = templateName ? await this.getTemplateByName(templateName) : null;
     if (!template?.body) {
       throw new BadRequestException('SMS template is not configured.');
@@ -243,7 +259,7 @@ export class SmsService {
       const batch = await this.prisma.smsBatch.create({
         data: {
           campaignId,
-          type,
+          type: batchType,
           status: SmsBatchStatus.COMPLETED,
           createdById: userId,
           completedAt: new Date(),
@@ -253,7 +269,7 @@ export class SmsService {
     }
 
     const existingMessages = await this.prisma.smsMessage.findMany({
-      where: { campaignId, type, orderId: { in: orders.map((order) => order.id) } },
+      where: { campaignId, type: batchType, orderId: { in: orders.map((order) => order.id) } },
       select: { orderId: true },
     });
     const seenOrders = new Set(existingMessages.map((msg) => msg.orderId).filter(Boolean));
@@ -264,7 +280,7 @@ export class SmsService {
     const batch = await this.prisma.smsBatch.create({
       data: {
         campaignId,
-        type,
+        type: batchType,
         status: eligibleOrders.length ? SmsBatchStatus.RUNNING : SmsBatchStatus.COMPLETED,
         createdById: userId,
         startedAt: eligibleOrders.length ? new Date() : null,
@@ -281,7 +297,7 @@ export class SmsService {
           orderId: order.id,
           customerId: order.customerId,
           batchId: batch.id,
-          type,
+          type: batchType,
         });
       }
     }
@@ -319,7 +335,7 @@ export class SmsService {
       },
     });
 
-    if (!this.twilioClient || this.bypass) {
+    if (!this.twilioClient) {
       return;
     }
 
@@ -387,7 +403,7 @@ export class SmsService {
       },
     });
 
-    if (this.twilioClient && !this.bypass) {
+    if (this.twilioClient) {
       const toE164 = toE164AuMobile(message.toMobile);
       try {
         const response = await this.twilioClient.messages.create({

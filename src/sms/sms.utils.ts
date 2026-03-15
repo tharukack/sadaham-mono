@@ -29,7 +29,7 @@ export const interpolateOrderTemplate = (body: string, order: any) => {
   const pickupBySameAsCustomer =
     (order.pickupByCustomer?.id && order.customer?.id
       ? order.pickupByCustomer.id === order.customer.id
-      : false) || (pickupByName && customerName && pickupByName === customerName);
+      : false) || Boolean(pickupByName && customerName && pickupByName === customerName);
   const notes = (order.note || '').toString().trim();
   const eventDate = order.campaign?.eventDate ? new Date(order.campaign.eventDate) : null;
   const eventDateLabel = eventDate ? eventDate.toISOString().slice(0, 10) : '';

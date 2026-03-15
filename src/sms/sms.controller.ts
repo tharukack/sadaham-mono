@@ -9,6 +9,7 @@ import { UpdateTemplateDto } from './dto/update-template.dto';
 import { Request } from 'express';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { UpdateBatchDto } from './dto/update-batch.dto';
+import { UpdateSmsSettingsDto } from './dto/update-settings.dto';
 
 @Controller('sms')
 @UseGuards(RolesGuard)
@@ -19,6 +20,20 @@ export class SmsController {
   @Roles(Role.SUPERADMIN)
   listTemplates() {
     return this.smsService.listTemplates();
+  }
+
+  @Get('settings/customer-messages')
+  @Roles(Role.SUPERADMIN)
+  async getCustomerMessagesSetting() {
+    const enabled = await this.smsService.getCustomerMessagesEnabled();
+    return { enabled };
+  }
+
+  @Post('settings/customer-messages')
+  @Roles(Role.SUPERADMIN)
+  async updateCustomerMessagesSetting(@Body() dto: UpdateSmsSettingsDto) {
+    await this.smsService.setCustomerMessagesEnabled(dto.enabled);
+    return { enabled: dto.enabled };
   }
 
   @Post('templates')

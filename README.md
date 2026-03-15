@@ -15,7 +15,6 @@ pnpm install
 ```bash
 cp .env.example .env
 # Update DATABASE_URL and Twilio credentials as needed
-# `TWILIO_BYPASS=true` keeps SMS offline and echoes OTP codes in responses for testing
 ```
 
 3. Run Prisma migrations and seed data
@@ -120,3 +119,13 @@ gunzip -c /path/to/backup.sql.gz | psql -h $PGHOST -p $PGPORT -U $PGUSER -d your
 ```
 
 This will recreate schema and data from the plain SQL dump.
+
+
+
+
+
+##Production setup
+
+docker compose --env-file .env.production up --build 
+
+docker compose --env-file .env.production exec api npx prisma migrate deploy

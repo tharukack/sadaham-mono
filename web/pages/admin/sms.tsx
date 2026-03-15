@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Label } from '../../components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Textarea } from '../../components/ui/textarea';
+import { Toggle } from '../../components/ui/toggle';
 import { useToast } from '../../components/ui/use-toast';
 import { cn } from '../../lib/utils';
 
@@ -81,6 +82,13 @@ export default function SmsPage() {
     queryFn: async () => (await api.get('/sms/templates')).data,
     enabled: isSuperAdmin,
   });
+  const { data: settingsData, isLoading: settingsLoading } = useQuery({
+    queryKey: ['sms-settings', 'customer-messages'],
+    queryFn: async () => (await api.get('/sms/settings/customer-messages')).data,
+    enabled: isSuperAdmin,
+  });
+  const customerMessagesEnabled =
+    typeof settingsData?.enabled === 'boolean' ? settingsData.enabled : true;
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -139,7 +147,10 @@ export default function SmsPage() {
     setForm(next);
   }, [templateOrder, templatesByName]);
 
-  const placeholderGroups = [
+  const placeholderGroups: Array<{
+    title: string;
+    items: Array<{ label: string; token: string; optional?: boolean }>;
+  }> = [
     {
       title: 'Variable',
       items: [
@@ -257,6 +268,42 @@ export default function SmsPage() {
       ) : (
         <Card>
           <CardContent>
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-4 py-3 text-sm">
+              <div>
+                <div className="font-medium">Customer SMS messages</div>
+                <div className="text-xs text-muted-foreground">
+                  When off, order confirmation and modification messages are not sent to customers.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {customerMessagesEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <Toggle
+                  checked={customerMessagesEnabled}
+                  disabled={settingsLoading}
+                  onCheckedChange={async (next) => {
+                    try {
+                      await api.post('/sms/settings/customer-messages', { enabled: next });
+                      await queryClient.invalidateQueries({
+                        queryKey: ['sms-settings', 'customer-messages'],
+                      });
+                      toast({
+                        title: `Customer SMS ${next ? 'enabled' : 'disabled'}`,
+                      });
+                    } catch (err: any) {
+                      toast({
+                        variant: 'destructive',
+                        title: 'Update failed',
+                        description:
+                          err?.response?.data?.message ||
+                          'Unable to update customer SMS setting.',
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
             {isLoading ? (
               <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
                 Loading templates...

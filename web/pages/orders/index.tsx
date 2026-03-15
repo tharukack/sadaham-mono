@@ -171,7 +171,7 @@ export default function OrdersPage() {
       { label: 'Egg', qty: Number(order.eggQty || 0) },
       { label: 'Other', qty: Number(order.otherQty || 0) },
     ];
-    const total = meals.reduce((sum, meal) => sum + meal.qty, 0);
+    const total = meals.reduce((sum: number, meal) => sum + meal.qty, 0);
     return { total, meals: meals.filter((meal) => meal.qty > 0) };
   };
 
@@ -192,14 +192,14 @@ export default function OrdersPage() {
   };
 
   const totalOrderAmount = useMemo(() => {
-    return orders.reduce((sum, order) => sum + getOrderCost(order), 0);
+    return orders.reduce((sum: number, order: any) => sum + getOrderCost(order), 0);
   }, [orders]);
 
   const totalOrdersCount = orders.length;
   const activeOrders = useMemo(() => orders.filter((order: any) => !order.deletedAt), [orders]);
   const activeOrderCount = activeOrders.length;
   const activeOrderAmount = useMemo(() => {
-    return activeOrders.reduce((sum, order) => sum + getOrderCost(order), 0);
+    return activeOrders.reduce((sum: number, order: any) => sum + getOrderCost(order), 0);
   }, [activeOrders]);
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat(undefined, { style: 'currency', currency: 'AUD' }).format(value);

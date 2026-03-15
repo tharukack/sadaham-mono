@@ -41,6 +41,9 @@ importers:
       csv-writer:
         specifier: ^1.6.0
         version: 1.6.0
+      date-fns:
+        specifier: ^3.6.0
+        version: 3.6.0
       passport:
         specifier: ^0.7.0
         version: 0.7.0
@@ -2061,6 +2064,10 @@ packages:
     dependencies:
       '@babel/runtime': 7.28.4
     dev: true
+
+  /date-fns@3.6.0:
+    resolution: {integrity: sha512-fRHTG8g/Gif+kSh50gaGEdToemgfj74aRX3swtiouboip5JDLAyDE9F11nHMIcvOaXeOC6D7SpNhi7uFyB7Uww==}
+    dev: false
 
   /dayjs@1.11.19:
     resolution: {integrity: sha512-t5EcLVS6QPBNqM2z8fakk/NKel+Xzshgt8FFKAn+qwlD1pzZWxh0nVCrvFK7ZDb6XucZeF9z8C7CBWTRIVApAw==}

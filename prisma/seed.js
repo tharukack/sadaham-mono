@@ -1,20 +1,14 @@
-import { PrismaClient, Role } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
-import { readFile } from 'fs/promises';
-import path from 'path';
+const { PrismaClient, Role } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const { readFile } = require('fs/promises');
+const path = require('path');
 
 const prisma = new PrismaClient();
 
 async function main() {
   const seedPath = path.resolve(process.cwd(), 'prisma', 'superadminseeder.json');
   const raw = await readFile(seedPath, 'utf-8');
-  const parsed = JSON.parse(raw) as {
-    mobile?: string;
-    password?: string;
-    firstName?: string;
-    lastName?: string;
-    email?: string | null;
-  };
+  const parsed = JSON.parse(raw);
 
   const seedMobile = parsed.mobile;
   const seedPassword = parsed.password;
@@ -47,8 +41,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {

@@ -16,6 +16,8 @@ export class OrdersService {
   ) {}
 
   private async sendOrderConfirmation(order: any) {
+    const enabled = await this.smsService.getCustomerMessagesEnabled();
+    if (!enabled) return;
     const mobile = order?.customer?.mobile;
     if (!mobile) return;
     const template = await this.smsService.getTemplateByName('Order Confirmation');
@@ -40,6 +42,8 @@ export class OrdersService {
   }
 
   private async sendOrderModified(order: any) {
+    const enabled = await this.smsService.getCustomerMessagesEnabled();
+    if (!enabled) return;
     const mobile = order?.customer?.mobile;
     if (!mobile) return;
     const template = await this.smsService.getTemplateByName('Order Modified');
