@@ -125,7 +125,7 @@ async function upsertSystemUser({ mobile, fullName, role, mainCollectorId, passw
 }
 
 async function main() {
-  const importFile = process.env.CUSTOMER_IMPORT_FILE || path.resolve(process.cwd(), 'prisma', 'customers.csv');
+  const importFile = process.env.CUSTOMER_IMPORT_FILE || path.resolve(process.cwd(), 'prisma', 'customers2.csv');
   const defaultPassword = process.env.CUSTOMER_IMPORT_PASSWORD || 'temptestt!123A';
 
   const raw = await readFile(importFile, 'utf-8');
