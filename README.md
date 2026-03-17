@@ -134,3 +134,13 @@ docker compose --env-file .env.production exec api npx prisma db seed
 
 docker compose --env-file .env.production exec api node prisma/import-customers.js
 
+##Production setup
+
+docker compose --env-file .env up --build 
+
+docker compose --env-file .env exec api npx prisma migrate deploy
+
+docker compose --env-file .env exec api npx prisma db seed
+
+docker compose --env-file .env exec api node prisma/import-customers.js
+

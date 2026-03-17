@@ -6,6 +6,8 @@ import { ThemeProvider } from '../components/theme-provider';
 import { Toaster } from '../components/ui/toaster';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { useRouter } from 'next/router';
+import { api } from '../lib/api';
+import { clearStoredSession, setStoredUser } from '../lib/session';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   const [client] = useState(() => new QueryClient());
@@ -18,19 +20,35 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const checkAuth = () => {
-      const token = localStorage.getItem('token');
+    const checkAuth = async () => {
       const isPublic = publicRoutes.has(router.pathname);
-      if (!token && !isPublic) {
-        if (router.pathname !== '/404') {
-          router.replace('/404');
-        }
+      if (isPublic) {
         setAuthChecked(true);
+        return;
+      }
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data?.user) {
+          setStoredUser({
+            ...res.data.user,
+            mustChangePassword: Boolean(res.data.mustChangePassword),
+          });
+          if (res.data.mustChangePassword && router.pathname !== '/change-password') {
+            router.replace('/change-password');
+            return;
+          }
+        }
+      } catch {
+        clearStoredSession();
+        setAuthChecked(true);
+        if (router.pathname !== '/login') {
+          router.replace('/login');
+        }
         return;
       }
       setAuthChecked(true);
     };
-    checkAuth();
+    void checkAuth();
   }, [publicRoutes, router]);
 
   if (typeof window !== 'undefined' && !authChecked && !publicRoutes.has(router.pathname)) {

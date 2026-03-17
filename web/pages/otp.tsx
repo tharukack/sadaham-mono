@@ -1,14 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { api } from '../lib/api';
-import { getAuthCookie, setAuthCookie } from '../lib/auth-cookie';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
 import { ShieldCheck } from 'lucide-react';
-import { getPostLoginRoute } from '../lib/session';
+import { clearStoredOtpState, getPostLoginRoute, setStoredUser } from '../lib/session';
 
 export default function OtpPage() {
   const [code, setCode] = useState('');
@@ -19,14 +18,25 @@ export default function OtpPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('token') || getAuthCookie();
-    if (token) {
-      router.replace(getPostLoginRoute());
-      return;
-    }
-    const stored = localStorage.getItem('otpToken');
-    if (stored) setOtpToken(stored);
-    setCheckedSession(true);
+    const checkSession = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data?.user) {
+          setStoredUser({
+            ...res.data.user,
+            mustChangePassword: Boolean(res.data.mustChangePassword),
+          });
+          router.replace(getPostLoginRoute());
+          return;
+        }
+      } catch {
+        // No active session; continue OTP flow.
+      }
+      const stored = localStorage.getItem('otpToken');
+      if (stored) setOtpToken(stored);
+      setCheckedSession(true);
+    };
+    void checkSession();
   }, [router]);
 
   const submit = async (e: FormEvent) => {
@@ -36,19 +46,11 @@ export default function OtpPage() {
         throw new Error('Missing OTP token. Please log in again.');
       }
       const res = await api.post('/auth/verify-otp', { otpToken, code });
-      const { accessToken, redirect, user, mustChangePassword } = res.data;
-      if (accessToken) {
-        localStorage.setItem('token', accessToken);
-        setAuthCookie(accessToken);
-      }
+      const { redirect, user, mustChangePassword } = res.data;
       if (user) {
-        localStorage.setItem(
-          'user',
-          JSON.stringify({ ...user, mustChangePassword: Boolean(mustChangePassword) }),
-        );
+        setStoredUser({ ...user, mustChangePassword: Boolean(mustChangePassword) });
       }
-      localStorage.removeItem('otpToken');
-      localStorage.removeItem('otpMobile');
+      clearStoredOtpState();
       if (mustChangePassword) {
         router.push('/change-password');
         return;

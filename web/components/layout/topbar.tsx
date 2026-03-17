@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
 import { Sidebar } from './sidebar';
 import { api } from '../../lib/api';
-import { clearAuthCookie } from '../../lib/auth-cookie';
+import { clearStoredOtpState, clearStoredSession } from '../../lib/session';
 
 export function Topbar({ title }: { title: string }) {
   const router = useRouter();
@@ -51,11 +51,8 @@ export function Topbar({ title }: { title: string }) {
     } catch {
       // Ignore logout errors; still clear local session
     }
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('otpToken');
-    localStorage.removeItem('otpMobile');
-    clearAuthCookie();
+    clearStoredSession();
+    clearStoredOtpState();
     router.push('/login');
   };
 

@@ -1,14 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { api } from '../lib/api';
-import { getAuthCookie, setAuthCookie } from '../lib/auth-cookie';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
 import { KeyRound } from 'lucide-react';
-import { getStoredUser } from '../lib/session';
+import { getStoredUser, setStoredUser, clearStoredSession } from '../lib/session';
 
 export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -20,35 +19,37 @@ export default function ChangePasswordPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('token') || getAuthCookie();
-    const user = getStoredUser();
-    if (!token) {
+    const checkSession = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data?.user) {
+          setStoredUser({
+            ...res.data.user,
+            mustChangePassword: Boolean(res.data.mustChangePassword),
+          });
+          if (!res.data.mustChangePassword) {
+            router.replace('/dashboard');
+            return;
+          }
+          setCheckedSession(true);
+          return;
+        }
+      } catch {
+        clearStoredSession();
+      }
       router.replace('/login');
-      return;
-    }
-    if (!user?.mustChangePassword) {
-      router.replace('/dashboard');
-      return;
-    }
-    setCheckedSession(true);
+    };
+    void checkSession();
   }, [router]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/auth/change-password', { currentPassword, newPassword });
-      const accessToken = res?.data?.accessToken;
-      if (accessToken) {
-        localStorage.setItem('token', accessToken);
-        setAuthCookie(accessToken);
-      }
+      await api.post('/auth/change-password', { currentPassword, newPassword });
       const currentUser = getStoredUser();
       if (currentUser) {
-        localStorage.setItem(
-          'user',
-          JSON.stringify({ ...currentUser, mustChangePassword: false }),
-        );
+        setStoredUser({ ...currentUser, mustChangePassword: false });
       }
       toast({ title: 'Password updated' });
       router.push('/dashboard');

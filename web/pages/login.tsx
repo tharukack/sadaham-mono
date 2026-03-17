@@ -8,8 +8,7 @@ import { Label } from '../components/ui/label';
 import { useToast } from '../components/ui/use-toast';
 import { normalizeAuMobile } from '../lib/phone';
 import { LogIn } from 'lucide-react';
-import { getAuthCookie } from '../lib/auth-cookie';
-import { getPostLoginRoute } from '../lib/session';
+import { getPostLoginRoute, setStoredUser } from '../lib/session';
 
 export default function LoginPage() {
   const [mobile, setMobile] = useState('');
@@ -20,12 +19,23 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('token') || getAuthCookie();
-    if (token) {
-      router.replace(getPostLoginRoute());
-      return;
-    }
-    setCheckedSession(true);
+    const checkSession = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data?.user) {
+          setStoredUser({
+            ...res.data.user,
+            mustChangePassword: Boolean(res.data.mustChangePassword),
+          });
+          router.replace(getPostLoginRoute());
+          return;
+        }
+      } catch {
+        // No active session; allow login form to render.
+      }
+      setCheckedSession(true);
+    };
+    void checkSession();
   }, [router]);
 
   const submit = async (e: FormEvent) => {

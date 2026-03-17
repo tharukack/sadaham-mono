@@ -4,8 +4,8 @@ import { useRouter } from 'next/router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { LogIn } from 'lucide-react';
-import { getAuthCookie } from '../lib/auth-cookie';
-import { getPostLoginRoute } from '../lib/session';
+import { api } from '../lib/api';
+import { getPostLoginRoute, setStoredUser } from '../lib/session';
 
 export default function Home() {
   const router = useRouter();
@@ -13,12 +13,23 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('token') || getAuthCookie();
-    if (token) {
-      router.replace(getPostLoginRoute());
-      return;
-    }
-    setCheckedSession(true);
+    const checkSession = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data?.user) {
+          setStoredUser({
+            ...res.data.user,
+            mustChangePassword: Boolean(res.data.mustChangePassword),
+          });
+          router.replace(getPostLoginRoute());
+          return;
+        }
+      } catch {
+        // No active session; allow public landing page to render.
+      }
+      setCheckedSession(true);
+    };
+    void checkSession();
   }, [router]);
 
   if (!checkedSession) {

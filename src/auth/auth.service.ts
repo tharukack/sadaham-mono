@@ -42,6 +42,34 @@ export class AuthService {
     return { message: 'OTP sent via SMS', expiresAt, otpToken: otp.id, next: 'VERIFY_OTP' };
   }
 
+  buildUserSummary(user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    mobile: string;
+    email: string | null;
+    address: string | null;
+    role: any;
+    isActive: boolean;
+    mainCollectorId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      mobile: user.mobile,
+      email: user.email,
+      address: user.address,
+      role: user.role,
+      isActive: user.isActive,
+      mainCollectorId: user.mainCollectorId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
   async verify(dto: VerifyOtpDto) {
     const activeOtp = await this.prisma.otpCode.findFirst({
       where: { id: dto.otpToken, consumedAt: null },
@@ -72,19 +100,7 @@ export class AuthService {
       { sub: user.id, role: user.role, sessionId: session.id, mustChangePassword: user.mustChangePassword },
       { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '12h' },
     );
-    const userSummary = {
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      mobile: user.mobile,
-      email: user.email,
-      address: user.address,
-      role: user.role,
-      isActive: user.isActive,
-      mainCollectorId: user.mainCollectorId,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    const userSummary = this.buildUserSummary(user);
     return {
       accessToken,
       sessionId: session.id,

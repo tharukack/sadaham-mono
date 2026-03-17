@@ -1,15 +1,19 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RateLimitService } from '../common/security/rate-limit.service';
+import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
+import { clearAuthCookie, setAuthCookie } from './auth-cookie';
 
 @Controller(['auth', ''])
 export class AuthController {
   constructor(
     private authService: AuthService,
     private rateLimit: RateLimitService,
+    private config: ConfigService,
   ) {}
 
   private getClientIp(req: any) {
@@ -42,7 +46,7 @@ export class AuthController {
   }
 
   @Post('verify')
-  async verify(@Body() dto: VerifyOtpDto, @Req() req: any) {
+  async verify(@Body() dto: VerifyOtpDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
     const ip = this.getClientIp(req);
     const otpToken = String(dto.otpToken || '').trim() || 'unknown';
     this.rateLimit.assertAllowed(`auth:verify:ip:${ip}`, {
@@ -59,19 +63,45 @@ export class AuthController {
     });
     const result = await this.authService.verify(dto);
     this.rateLimit.reset(`auth:verify:token:${otpToken}`);
-    return result;
+    setAuthCookie(res, result.accessToken, this.config);
+    return {
+      user: result.user,
+      mustChangePassword: result.mustChangePassword,
+      redirect: result.redirect,
+    };
   }
 
   @Post('verify-otp')
-  verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: any) {
-    return this.verify(dto, req);
+  verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: any, @Res({ passthrough: true }) res: Response) {
+    return this.verify(dto, req, res);
+  }
+
+  @Get('me')
+  me(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const user = req?.user;
+    const sessionId = req?.sessionId;
+    if (!user || !sessionId) {
+      clearAuthCookie(res, this.config);
+      throw new UnauthorizedException('Missing authenticated session');
+    }
+    return {
+      user: this.authService.buildUserSummary(user),
+      sessionId,
+      mustChangePassword: Boolean(user.mustChangePassword),
+      redirect: user.mustChangePassword ? '/change-password' : '/dashboard',
+    };
   }
 
   @Post('change-password')
-  async changePassword(@Body() dto: ChangePasswordDto, @Req() req: any) {
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const userId = req?.user?.id;
     const sessionId = req?.sessionId;
     if (!userId || !sessionId) {
+      clearAuthCookie(res, this.config);
       throw new UnauthorizedException('Missing authenticated session');
     }
     const ip = this.getClientIp(req);
@@ -89,15 +119,17 @@ export class AuthController {
     });
     const result = await this.authService.changePassword(userId, sessionId, dto);
     this.rateLimit.reset(`auth:change-password:user:${userId}`);
-    return result;
+    setAuthCookie(res, result.accessToken, this.config);
+    return { mustChangePassword: result.mustChangePassword };
   }
 
   @Post('logout')
-  logout(@Req() req: any) {
+  async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
     const userId = req?.user?.id;
     const sessionId = req?.sessionId;
+    clearAuthCookie(res, this.config);
     if (!userId || !sessionId) {
-      throw new UnauthorizedException('Missing authenticated session');
+      return { ok: true };
     }
     return this.authService.logout(userId, sessionId);
   }
