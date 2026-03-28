@@ -12,7 +12,17 @@ export class CustomersService {
   list() {
     return this.prisma.customer.findMany({
       where: { deletedAt: null },
-      include: { orders: true },
+      include: {
+        orders: true,
+        _count: {
+          select: {
+            orders: true,
+            pickupByOrders: true,
+            transporterLocations: true,
+            distributorLocations: true,
+          },
+        },
+      },
     });
   }
 
@@ -29,7 +39,17 @@ export class CustomersService {
             : []),
         ],
       },
-      include: { createdBy: true },
+      include: {
+        createdBy: true,
+        _count: {
+          select: {
+            orders: true,
+            pickupByOrders: true,
+            transporterLocations: true,
+            distributorLocations: true,
+          },
+        },
+      },
     });
   }
 
@@ -110,6 +130,40 @@ export class CustomersService {
   }
 
   async softDelete(id: string, userId: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        deletedAt: true,
+        _count: {
+          select: {
+            orders: true,
+            pickupByOrders: true,
+            transporterLocations: true,
+            distributorLocations: true,
+          },
+        },
+      },
+    });
+    if (!customer) {
+      throw new BadRequestException('Customer not found.');
+    }
+    if (customer.deletedAt) {
+      return customer;
+    }
+
+    const usageCount =
+      customer._count.orders +
+      customer._count.pickupByOrders +
+      customer._count.transporterLocations +
+      customer._count.distributorLocations;
+
+    if (usageCount > 0) {
+      throw new BadRequestException(
+        'Customer is already used in the system and cannot be deleted.',
+      );
+    }
+
     const deleted = await this.prisma.customer.update({
       where: { id },
       data: { deletedAt: new Date(), updatedById: userId },

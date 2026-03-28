@@ -36,6 +36,7 @@ import { formatAuMobile } from '../../lib/phone';
 
 export default function OrdersPage() {
   const [currentRole, setCurrentRole] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const raw = localStorage.getItem('user');
@@ -43,8 +44,10 @@ export default function OrdersPage() {
     try {
       const parsed = JSON.parse(raw);
       setCurrentRole(parsed?.role || '');
+      setCurrentUserId(parsed?.id || '');
     } catch {
       setCurrentRole('');
+      setCurrentUserId('');
     }
   }, []);
 
@@ -68,7 +71,7 @@ export default function OrdersPage() {
     enabled: !!currentCampaignQuery.data?.id && editPickupByOpen,
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted' | 'mine'>('all');
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
   const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'updated' | 'name'>('updated');
@@ -107,7 +110,9 @@ export default function OrdersPage() {
       ? (ordersQuery.data || []).filter((order: any) => order.campaignId === currentCampaignId)
       : [];
     const statusScoped =
-      statusFilter === 'active'
+      statusFilter === 'mine'
+        ? scoped.filter((order: any) => (order.createdBy?.id || '') === currentUserId)
+        : statusFilter === 'active'
         ? scoped.filter((order: any) => !order.deletedAt)
         : statusFilter === 'deleted'
         ? scoped.filter((order: any) => !!order.deletedAt)
@@ -125,7 +130,7 @@ export default function OrdersPage() {
         matchesMobile
       );
     });
-  }, [ordersQuery.data, searchTerm, currentCampaignQuery.data?.id, statusFilter]);
+  }, [ordersQuery.data, searchTerm, currentCampaignQuery.data?.id, statusFilter, currentUserId]);
 
   const sortedOrders = useMemo(() => {
     const next = [...orders];
@@ -517,7 +522,9 @@ export default function OrdersPage() {
             />
             <Select
               value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as 'all' | 'active' | 'deleted')}
+              onValueChange={(value) =>
+                setStatusFilter(value as 'all' | 'active' | 'deleted' | 'mine')
+              }
             >
               <SelectTrigger className="h-10 w-full sm:w-[180px]">
                 <SelectValue placeholder="Filter status" />
@@ -526,6 +533,7 @@ export default function OrdersPage() {
                 <SelectItem value="all">All orders</SelectItem>
                 <SelectItem value="active">Active only</SelectItem>
                 <SelectItem value="deleted">Deleted only</SelectItem>
+                <SelectItem value="mine">My orders</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { OrderDetailsModal } from '../components/order-details-modal';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatAuMobile } from '../lib/phone';
 
@@ -65,6 +66,14 @@ const toFileSafeName = (value?: string) => {
   return value.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
 };
 
+const ALL_PICKUP_POINTS = '__all__';
+
+const compareText = (a: string, b: string) =>
+  a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
+const compareNumber = (a: number, b: number) => a - b;
+const blankIfZero = (value: number) => (value === 0 ? '' : value);
+
 export default function DispatchPage() {
   const locationsQuery = useQuery({
     queryKey: ['locations'],
@@ -82,14 +91,24 @@ export default function DispatchPage() {
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [summaryPage, setSummaryPage] = useState(1);
   const [summaryRowsPerPage, setSummaryRowsPerPage] = useState<'10' | '20' | '50' | '100' | 'all'>('10');
+  const [summarySortBy, setSummarySortBy] = useState<
+    'name' | 'address' | 'distributor' | 'transporter' | 'packets' | 'deliveryTime' | 'priority' | 'dispatchTime'
+  >('name');
+  const [summarySortDir, setSummarySortDir] = useState<'asc' | 'desc'>('asc');
   const [pickupPage, setPickupPage] = useState(1);
   const [collectorRowsPerPage, setCollectorRowsPerPage] = useState<
     '10' | '20' | '50' | '100' | 'all'
   >('10');
+  const [pickupSortBy, setPickupSortBy] = useState<
+    'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'packets' | 'notes'
+  >('customer');
+  const [pickupSortDir, setPickupSortDir] = useState<'asc' | 'desc'>('asc');
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState<'10' | '20' | '50' | '100' | 'all'>('10');
-  const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'customer' | 'pickup'>('created');
-  const [ordersSortDir, setOrdersSortDir] = useState<'asc' | 'desc'>('desc');
+  const [ordersSortBy, setOrdersSortBy] = useState<
+    'created' | 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
+  >('created');
+  const [ordersSortDir, setOrdersSortDir] = useState<'asc' | 'desc'>('asc');
   const [systemUserFilter, setSystemUserFilter] = useState<string>('all');
   const [mainUserFilter, setMainUserFilter] = useState<string>('all');
 
@@ -101,16 +120,6 @@ export default function DispatchPage() {
       : [];
     return scoped.filter((order: any) => !order.deletedAt);
   }, [ordersQuery.data, currentCampaignQuery.data?.id]);
-  const summaryPageCount = useMemo(() => {
-    if (summaryRowsPerPage === 'all') return 1;
-    return Math.max(1, Math.ceil(locations.length / Number(summaryRowsPerPage)));
-  }, [locations.length, summaryRowsPerPage]);
-  const pagedLocations = useMemo(() => {
-    if (summaryRowsPerPage === 'all') return locations;
-    const start = (summaryPage - 1) * Number(summaryRowsPerPage);
-    return locations.slice(start, start + Number(summaryRowsPerPage));
-  }, [locations, summaryPage, summaryRowsPerPage]);
-
   const summaryByLocation = useMemo(() => {
     const map = new Map<
       string,
@@ -131,43 +140,154 @@ export default function DispatchPage() {
     });
     return map;
   }, [activeOrders]);
+  const sortedSummaryLocations = useMemo(() => {
+    const next = [...locations];
+    next.sort((a: any, b: any) => {
+      const aTotals = summaryByLocation.get(a.id) || { total: 0 };
+      const bTotals = summaryByLocation.get(b.id) || { total: 0 };
+      let result = 0;
+      switch (summarySortBy) {
+        case 'name':
+          result = compareText(a.name || '', b.name || '');
+          break;
+        case 'address':
+          result = compareText(a.address || '', b.address || '');
+          break;
+        case 'distributor':
+          result = compareText(
+            a.distributorCustomer ? getName(a.distributorCustomer) : a.distributorName || '',
+            b.distributorCustomer ? getName(b.distributorCustomer) : b.distributorName || ''
+          );
+          break;
+        case 'transporter':
+          result = compareText(
+            a.transporterCustomer ? getName(a.transporterCustomer) : '',
+            b.transporterCustomer ? getName(b.transporterCustomer) : ''
+          );
+          break;
+        case 'packets':
+          result = compareNumber(aTotals.total, bTotals.total);
+          break;
+        case 'deliveryTime':
+          result = compareNumber(
+            Number(a.deliveryTimeMinutes ?? Number.POSITIVE_INFINITY),
+            Number(b.deliveryTimeMinutes ?? Number.POSITIVE_INFINITY)
+          );
+          break;
+        case 'priority':
+          result = compareNumber(
+            Number(a.distributionPriority ?? Number.POSITIVE_INFINITY),
+            Number(b.distributionPriority ?? Number.POSITIVE_INFINITY)
+          );
+          break;
+        case 'dispatchTime':
+          result = compareText(a.timeOfDispatch || '', b.timeOfDispatch || '');
+          break;
+      }
+      return summarySortDir === 'asc' ? result : -result;
+    });
+    return next;
+  }, [locations, summaryByLocation, summarySortBy, summarySortDir]);
+  const summaryPageCount = useMemo(() => {
+    if (summaryRowsPerPage === 'all') return 1;
+    return Math.max(1, Math.ceil(sortedSummaryLocations.length / Number(summaryRowsPerPage)));
+  }, [sortedSummaryLocations.length, summaryRowsPerPage]);
+  const pagedLocations = useMemo(() => {
+    if (summaryRowsPerPage === 'all') return sortedSummaryLocations;
+    const start = (summaryPage - 1) * Number(summaryRowsPerPage);
+    return sortedSummaryLocations.slice(start, start + Number(summaryRowsPerPage));
+  }, [sortedSummaryLocations, summaryPage, summaryRowsPerPage]);
   const totalOrderCount = activeOrders.length;
+  const totalMealPacketCount = useMemo(
+    () => activeOrders.reduce((sum: number, order: any) => sum + getOrderMealTotals(order).total, 0),
+    [activeOrders]
+  );
   const summaryRangeLabel = useMemo(() => {
-    if (locations.length === 0) return '0 of 0';
-    if (summaryRowsPerPage === 'all') return `1-${locations.length} of ${locations.length}`;
+    if (sortedSummaryLocations.length === 0) return '0 of 0';
+    if (summaryRowsPerPage === 'all') {
+      return `1-${sortedSummaryLocations.length} of ${sortedSummaryLocations.length}`;
+    }
     const start = (summaryPage - 1) * Number(summaryRowsPerPage) + 1;
-    const end = Math.min(summaryPage * Number(summaryRowsPerPage), locations.length);
-    return `${start}-${end} of ${locations.length}`;
-  }, [locations.length, summaryPage, summaryRowsPerPage]);
+    const end = Math.min(summaryPage * Number(summaryRowsPerPage), sortedSummaryLocations.length);
+    return `${start}-${end} of ${sortedSummaryLocations.length}`;
+  }, [sortedSummaryLocations.length, summaryPage, summaryRowsPerPage]);
 
   const pickupOrders = useMemo(() => {
     if (!selectedPickupId) return [];
+    if (selectedPickupId === ALL_PICKUP_POINTS) return activeOrders;
     return activeOrders.filter((order: any) => order.pickupLocationId === selectedPickupId);
   }, [activeOrders, selectedPickupId]);
   const selectedPickupName = useMemo(() => {
     if (!selectedPickupId) return '';
+    if (selectedPickupId === ALL_PICKUP_POINTS) return 'All pickup points';
     return locations.find((loc: any) => loc.id === selectedPickupId)?.name || '';
   }, [locations, selectedPickupId]);
 
   const pickupOrderCount = pickupOrders.length;
+  const pickupMealPacketCount = useMemo(
+    () => pickupOrders.reduce((sum: number, order: any) => sum + getOrderMealTotals(order).total, 0),
+    [pickupOrders]
+  );
+  const sortedPickupOrders = useMemo(() => {
+    const next = [...pickupOrders];
+    next.sort((a: any, b: any) => {
+      const aTotals = getOrderMealTotals(a);
+      const bTotals = getOrderMealTotals(b);
+      const aCreatedBy = a.createdBy;
+      const bCreatedBy = b.createdBy;
+      const aMainCollector =
+        aCreatedBy?.mainCollector && aCreatedBy.mainCollector.id !== aCreatedBy.id
+          ? aCreatedBy.mainCollector
+          : null;
+      const bMainCollector =
+        bCreatedBy?.mainCollector && bCreatedBy.mainCollector.id !== bCreatedBy.id
+          ? bCreatedBy.mainCollector
+          : null;
+      let result = 0;
+      switch (pickupSortBy) {
+        case 'mainCollector':
+          result = compareText(getName(aMainCollector || aCreatedBy), getName(bMainCollector || bCreatedBy));
+          break;
+        case 'enteredBy':
+          result = compareText(getName(aCreatedBy), getName(bCreatedBy));
+          break;
+        case 'customer':
+          result = compareText(getName(a.customer), getName(b.customer));
+          break;
+        case 'mobile':
+          result = compareText(formatAuMobile(a.customer?.mobile || '') || '', formatAuMobile(b.customer?.mobile || '') || '');
+          break;
+        case 'packets':
+          result = compareNumber(aTotals.total, bTotals.total);
+          break;
+        case 'notes':
+          result = compareText(a.note || '', b.note || '');
+          break;
+      }
+      return pickupSortDir === 'asc' ? result : -result;
+    });
+    return next;
+  }, [pickupOrders, pickupSortBy, pickupSortDir]);
   const pickupPageCount = useMemo(() => {
     if (collectorRowsPerPage === 'all') return 1;
-    return Math.max(1, Math.ceil(pickupOrders.length / Number(collectorRowsPerPage)));
-  }, [pickupOrders.length, collectorRowsPerPage]);
+    return Math.max(1, Math.ceil(sortedPickupOrders.length / Number(collectorRowsPerPage)));
+  }, [sortedPickupOrders.length, collectorRowsPerPage]);
 
   const pickupPagedOrders = useMemo(() => {
-    if (collectorRowsPerPage === 'all') return pickupOrders;
+    if (collectorRowsPerPage === 'all') return sortedPickupOrders;
     const start = (pickupPage - 1) * Number(collectorRowsPerPage);
-    return pickupOrders.slice(start, start + Number(collectorRowsPerPage));
-  }, [pickupOrders, pickupPage, collectorRowsPerPage]);
+    return sortedPickupOrders.slice(start, start + Number(collectorRowsPerPage));
+  }, [sortedPickupOrders, pickupPage, collectorRowsPerPage]);
 
   const pickupRangeLabel = useMemo(() => {
-    if (pickupOrders.length === 0) return '0 of 0';
-    if (collectorRowsPerPage === 'all') return `1-${pickupOrders.length} of ${pickupOrders.length}`;
+    if (sortedPickupOrders.length === 0) return '0 of 0';
+    if (collectorRowsPerPage === 'all') {
+      return `1-${sortedPickupOrders.length} of ${sortedPickupOrders.length}`;
+    }
     const start = (pickupPage - 1) * Number(collectorRowsPerPage) + 1;
-    const end = Math.min(pickupPage * Number(collectorRowsPerPage), pickupOrders.length);
-    return `${start}-${end} of ${pickupOrders.length}`;
-  }, [pickupOrders.length, pickupPage, collectorRowsPerPage]);
+    const end = Math.min(pickupPage * Number(collectorRowsPerPage), sortedPickupOrders.length);
+    return `${start}-${end} of ${sortedPickupOrders.length}`;
+  }, [sortedPickupOrders.length, pickupPage, collectorRowsPerPage]);
 
   useEffect(() => {
     setPickupPage(1);
@@ -188,10 +308,7 @@ export default function DispatchPage() {
     const map = new Map<string, { id: string; label: string }>();
     activeOrders.forEach((order: any) => {
       const createdBy = order.createdBy;
-      const mainCollector =
-        createdBy?.mainCollector && createdBy.mainCollector.id !== createdBy.id
-          ? createdBy.mainCollector
-          : null;
+      const mainCollector = createdBy?.mainCollector || createdBy;
       if (!mainCollector?.id) return;
       map.set(mainCollector.id, { id: mainCollector.id, label: getName(mainCollector) });
     });
@@ -202,9 +319,7 @@ export default function DispatchPage() {
     return activeOrders.filter((order: any) => {
       const createdById = order.createdBy?.id || '';
       const mainCollectorId =
-        order.createdBy?.mainCollector && order.createdBy.mainCollector.id !== order.createdBy.id
-          ? order.createdBy.mainCollector.id
-          : '';
+        order.createdBy?.mainCollector?.id || order.createdBy?.id || '';
       const matchesSystem = systemUserFilter === 'all' || createdById === systemUserFilter;
       const matchesMain = mainUserFilter === 'all' || mainCollectorId === mainUserFilter;
       return matchesSystem && matchesMain;
@@ -214,19 +329,51 @@ export default function DispatchPage() {
   const sortedOrders = useMemo(() => {
     const next = [...filteredOrders];
     next.sort((a: any, b: any) => {
-      if (ordersSortBy === 'customer') {
-        const aName = getName(a.customer);
-        const bName = getName(b.customer);
-        return ordersSortDir === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+      const aCreatedBy = a.createdBy;
+      const bCreatedBy = b.createdBy;
+      const aMainCollector =
+        aCreatedBy?.mainCollector && aCreatedBy.mainCollector.id !== aCreatedBy.id
+          ? aCreatedBy.mainCollector
+          : null;
+      const bMainCollector =
+        bCreatedBy?.mainCollector && bCreatedBy.mainCollector.id !== bCreatedBy.id
+          ? bCreatedBy.mainCollector
+          : null;
+      const aPickup = locations.find((loc: any) => loc.id === a.pickupLocationId)?.name || '';
+      const bPickup = locations.find((loc: any) => loc.id === b.pickupLocationId)?.name || '';
+      const aTotals = getOrderMealTotals(a);
+      const bTotals = getOrderMealTotals(b);
+      let result = 0;
+      switch (ordersSortBy) {
+        case 'created':
+          result = compareNumber(
+            new Date(a.createdAt || 0).getTime(),
+            new Date(b.createdAt || 0).getTime()
+          );
+          break;
+        case 'mainCollector':
+          result = compareText(getName(aMainCollector || aCreatedBy), getName(bMainCollector || bCreatedBy));
+          break;
+        case 'enteredBy':
+          result = compareText(getName(aCreatedBy), getName(bCreatedBy));
+          break;
+        case 'customer':
+          result = compareText(getName(a.customer), getName(b.customer));
+          break;
+        case 'mobile':
+          result = compareText(formatAuMobile(a.customer?.mobile || '') || '', formatAuMobile(b.customer?.mobile || '') || '');
+          break;
+        case 'pickup':
+          result = compareText(aPickup, bPickup);
+          break;
+        case 'packets':
+          result = compareNumber(aTotals.total, bTotals.total);
+          break;
+        case 'notes':
+          result = compareText(a.note || '', b.note || '');
+          break;
       }
-      if (ordersSortBy === 'pickup') {
-        const aPickup = locations.find((loc: any) => loc.id === a.pickupLocationId)?.name || '';
-        const bPickup = locations.find((loc: any) => loc.id === b.pickupLocationId)?.name || '';
-        return ordersSortDir === 'asc' ? aPickup.localeCompare(bPickup) : bPickup.localeCompare(aPickup);
-      }
-      const aDate = new Date(a.createdAt || 0).getTime();
-      const bDate = new Date(b.createdAt || 0).getTime();
-      return ordersSortDir === 'asc' ? aDate - bDate : bDate - aDate;
+      return ordersSortDir === 'asc' ? result : -result;
     });
     return next;
   }, [filteredOrders, ordersSortBy, ordersSortDir, locations]);
@@ -235,6 +382,53 @@ export default function DispatchPage() {
     if (ordersRowsPerPage === 'all') return 1;
     return Math.max(1, Math.ceil(sortedOrders.length / Number(ordersRowsPerPage)));
   }, [sortedOrders.length, ordersRowsPerPage]);
+
+  const allOrdersMealPacketCount = useMemo(
+    () => sortedOrders.reduce((sum: number, order: any) => sum + getOrderMealTotals(order).total, 0),
+    [sortedOrders]
+  );
+
+  const toggleSummarySort = (
+    column: 'name' | 'address' | 'distributor' | 'transporter' | 'packets' | 'deliveryTime' | 'priority' | 'dispatchTime'
+  ) => {
+    if (summarySortBy === column) {
+      setSummarySortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSummarySortBy(column);
+    setSummarySortDir('asc');
+  };
+
+  const togglePickupSort = (
+    column: 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'packets' | 'notes'
+  ) => {
+    if (pickupSortBy === column) {
+      setPickupSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setPickupSortBy(column);
+    setPickupSortDir('asc');
+  };
+
+  const toggleOrdersSort = (
+    column: 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
+  ) => {
+    if (ordersSortBy === column) {
+      setOrdersSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setOrdersSortBy(column);
+    setOrdersSortDir('asc');
+  };
+
+  const getSortIndicator = (isActive: boolean, direction: 'asc' | 'desc') => {
+    if (!isActive) return null;
+    return direction === 'asc' ? (
+      <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : (
+      <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+    );
+  };
 
   const pagedOrders = useMemo(() => {
     if (ordersRowsPerPage === 'all') return sortedOrders;
@@ -259,12 +453,8 @@ export default function DispatchPage() {
         'Distributor Mobile',
         'Transporter',
         'Transporter Mobile',
-        'Total Meals',
-        'Chicken',
-        'Fish',
+        'Total Packets',
         'Veg',
-        'Egg',
-        'Other',
         'Delivery Time (Min)',
         'Priority',
         'Dispatch Time',
@@ -289,6 +479,7 @@ export default function DispatchPage() {
       const transporterMobile = loc.transporterCustomer
         ? formatAuMobile(loc.transporterCustomer.mobile || '') || ''
         : '';
+      if (totals.total === 0) return;
       rows.push([
         loc.name || '',
         loc.address || '',
@@ -297,13 +488,13 @@ export default function DispatchPage() {
         transporterName,
         transporterMobile,
         totals.total,
-        totals.chicken,
-        totals.fish,
-        totals.veg,
-        totals.egg,
-        totals.other,
-        typeof loc.deliveryTimeMinutes === 'number' ? loc.deliveryTimeMinutes : '',
-        typeof loc.distributionPriority === 'number' ? loc.distributionPriority : '',
+        blankIfZero(totals.veg),
+        typeof loc.deliveryTimeMinutes === 'number'
+          ? blankIfZero(loc.deliveryTimeMinutes)
+          : '',
+        typeof loc.distributionPriority === 'number'
+          ? blankIfZero(loc.distributionPriority)
+          : '',
         formatDispatchTime(loc.timeOfDispatch),
       ]);
     });
@@ -319,12 +510,8 @@ export default function DispatchPage() {
         'Entered By',
         'Customer',
         'Customer Mobile',
-        'Total Meals',
-        'Chicken',
-        'Fish',
+        'Total Packets',
         'Veg',
-        'Egg',
-        'Other',
         'Notes',
       ],
     ];
@@ -336,17 +523,15 @@ export default function DispatchPage() {
           : null;
       const totals = getOrderMealTotals(order);
       rows.push([
-        selectedPickupName,
+        selectedPickupId === ALL_PICKUP_POINTS
+          ? order.pickupLocation?.name || '-'
+          : selectedPickupName,
         getName(mainCollector || createdBy),
         getName(createdBy),
         getName(order.customer),
         formatAuMobile(order.customer?.mobile || '') || '',
         totals.total,
-        totals.chicken,
-        totals.fish,
-        totals.veg,
-        totals.egg,
-        totals.other,
+        blankIfZero(totals.veg),
         order.note || '',
       ]);
     });
@@ -374,7 +559,7 @@ export default function DispatchPage() {
                 <div className="flex flex-wrap items-center gap-3">
                   <CardTitle>Dispatch Summary</CardTitle>
                   <span className="text-sm font-medium text-muted-foreground">
-                    Total Orders: {totalOrderCount}
+                    Total Orders: {totalOrderCount} | Total Meal Packets: {totalMealPacketCount}
                   </span>
                 </div>
                 <Button
@@ -412,15 +597,46 @@ export default function DispatchPage() {
                     <Table className="min-w-[1600px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="sticky left-0 z-10 bg-background">Name</TableHead>
-                        <TableHead>Address</TableHead>
-                        <TableHead>Distributor</TableHead>
-                        <TableHead>Transporter</TableHead>
-                        <TableHead>Total Meals</TableHead>
-                        <TableHead>Meals By Type</TableHead>
-                        <TableHead>Delivery Time (Min)</TableHead>
-                        <TableHead>Priority</TableHead>
-                        <TableHead>Dispatch Time</TableHead>
+                        <TableHead className="sticky left-0 z-10 bg-background">
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('name')}>
+                            Name{getSortIndicator(summarySortBy === 'name', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('address')}>
+                            Address{getSortIndicator(summarySortBy === 'address', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('distributor')}>
+                            Distributor{getSortIndicator(summarySortBy === 'distributor', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('transporter')}>
+                            Transporter{getSortIndicator(summarySortBy === 'transporter', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('packets')}>
+                            Total Packets{getSortIndicator(summarySortBy === 'packets', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('deliveryTime')}>
+                            Delivery Time (Min){getSortIndicator(summarySortBy === 'deliveryTime', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('priority')}>
+                            Priority{getSortIndicator(summarySortBy === 'priority', summarySortDir)}
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleSummarySort('dispatchTime')}>
+                            Dispatch Time{getSortIndicator(summarySortBy === 'dispatchTime', summarySortDir)}
+                          </button>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -433,13 +649,6 @@ export default function DispatchPage() {
                           other: 0,
                           total: 0,
                         };
-                        const meals = [
-                          { label: 'Chicken', value: totals.chicken },
-                          { label: 'Fish', value: totals.fish },
-                          { label: 'Veg', value: totals.veg },
-                          { label: 'Egg', value: totals.egg },
-                          { label: 'Other', value: totals.other },
-                        ].filter((meal) => meal.value > 0);
                           return (
                           <TableRow key={loc.id}>
                             <TableCell className="sticky left-0 z-10 bg-background font-medium">
@@ -480,19 +689,6 @@ export default function DispatchPage() {
                               )}
                             </TableCell>
                             <TableCell className="font-semibold">{totals.total}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap items-center gap-2">
-                                {meals.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">No meals</span>
-                                ) : (
-                                  meals.map((meal) => (
-                                    <Badge key={meal.label} variant="secondary">
-                                      {meal.label} {meal.value}
-                                    </Badge>
-                                  ))
-                                )}
-                              </div>
-                            </TableCell>
                             <TableCell>
                               {typeof loc.deliveryTimeMinutes === 'number' ? loc.deliveryTimeMinutes : '-'}
                             </TableCell>
@@ -563,7 +759,8 @@ export default function DispatchPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle>Orders By Pickup Point</CardTitle>
                   <span className="text-sm font-medium text-muted-foreground">
-                    Total Orders: {selectedPickupId ? pickupOrderCount : 0}
+                    Total Orders: {selectedPickupId ? pickupOrderCount : 0} | Total Meal Packets:{' '}
+                    {selectedPickupId ? pickupMealPacketCount : 0}
                   </span>
                 </div>
               </div>
@@ -573,6 +770,7 @@ export default function DispatchPage() {
                     <SelectValue placeholder="Select pickup location" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={ALL_PICKUP_POINTS}>All pickup points</SelectItem>
                     {locations.map((loc: any) => (
                       <SelectItem key={loc.id} value={loc.id}>
                         {loc.name}
@@ -644,25 +842,42 @@ export default function DispatchPage() {
                       <Table className="min-w-[1200px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Main Collector</TableHead>
-                            <TableHead>Entered By</TableHead>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Mobile</TableHead>
-                            <TableHead>Total Meals</TableHead>
-                            <TableHead>Meals By Type</TableHead>
-                            <TableHead>Notes</TableHead>
+                            <TableHead>Pickup Location</TableHead>
+                            <TableHead>
+                              <button type="button" className="flex items-center gap-1 font-medium" onClick={() => togglePickupSort('mainCollector')}>
+                                Main Collector{getSortIndicator(pickupSortBy === 'mainCollector', pickupSortDir)}
+                              </button>
+                            </TableHead>
+                            <TableHead>
+                              <button type="button" className="flex items-center gap-1 font-medium" onClick={() => togglePickupSort('enteredBy')}>
+                                Entered By{getSortIndicator(pickupSortBy === 'enteredBy', pickupSortDir)}
+                              </button>
+                            </TableHead>
+                            <TableHead>
+                              <button type="button" className="flex items-center gap-1 font-medium" onClick={() => togglePickupSort('customer')}>
+                                Customer{getSortIndicator(pickupSortBy === 'customer', pickupSortDir)}
+                              </button>
+                            </TableHead>
+                            <TableHead>
+                              <button type="button" className="flex items-center gap-1 font-medium" onClick={() => togglePickupSort('mobile')}>
+                                Mobile{getSortIndicator(pickupSortBy === 'mobile', pickupSortDir)}
+                              </button>
+                            </TableHead>
+                            <TableHead>
+                              <button type="button" className="flex items-center gap-1 font-medium" onClick={() => togglePickupSort('packets')}>
+                                Total Packets{getSortIndicator(pickupSortBy === 'packets', pickupSortDir)}
+                              </button>
+                            </TableHead>
+                            <TableHead>
+                              <button type="button" className="flex items-center gap-1 font-medium" onClick={() => togglePickupSort('notes')}>
+                                Notes{getSortIndicator(pickupSortBy === 'notes', pickupSortDir)}
+                              </button>
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {pickupPagedOrders.map((order: any) => {
                             const totals = getOrderMealTotals(order);
-                            const meals = [
-                              { label: 'Chicken', value: totals.chicken },
-                              { label: 'Fish', value: totals.fish },
-                              { label: 'Veg', value: totals.veg },
-                              { label: 'Egg', value: totals.egg },
-                              { label: 'Other', value: totals.other },
-                            ].filter((meal) => meal.value > 0);
                             const createdBy = order.createdBy;
                             const mainCollector =
                               createdBy?.mainCollector && createdBy.mainCollector.id !== createdBy.id
@@ -670,6 +885,7 @@ export default function DispatchPage() {
                                 : null;
                             return (
                               <TableRow key={order.id}>
+                                <TableCell>{order.pickupLocation?.name || '-'}</TableCell>
                                 <TableCell>{getName(mainCollector || createdBy)}</TableCell>
                                 <TableCell>{getName(createdBy)}</TableCell>
                                 <TableCell>
@@ -683,19 +899,6 @@ export default function DispatchPage() {
                                 </TableCell>
                                 <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
                                 <TableCell className="font-medium">{totals.total}</TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {meals.length === 0 ? (
-                                      <span className="text-xs text-muted-foreground">No meals</span>
-                                    ) : (
-                                      meals.map((meal) => (
-                                        <Badge key={meal.label} variant="secondary">
-                                          {meal.label} {meal.value}
-                                        </Badge>
-                                      ))
-                                    )}
-                                  </div>
-                                </TableCell>
                                 <TableCell className="max-w-[240px] truncate text-muted-foreground">
                                   {order.note || '-'}
                                 </TableCell>
@@ -740,7 +943,8 @@ export default function DispatchPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle>All Campaign Orders</CardTitle>
                   <span className="text-sm font-medium text-muted-foreground">
-                    Total Orders: {sortedOrders.length}
+                    Total Orders: {sortedOrders.length} | Total Meal Packets:{' '}
+                    {allOrdersMealPacketCount}
                   </span>
                 </div>
               </div>
@@ -876,26 +1080,46 @@ export default function DispatchPage() {
                     <Table className="min-w-[1400px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Entered By</TableHead>
-                          <TableHead>Main Collector</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Mobile</TableHead>
-                          <TableHead>Pickup Location</TableHead>
-                          <TableHead>Total Meals</TableHead>
-                          <TableHead>Meals By Type</TableHead>
-                          <TableHead>Notes</TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('mainCollector')}>
+                              Main Collector{getSortIndicator(ordersSortBy === 'mainCollector', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('enteredBy')}>
+                              Entered By{getSortIndicator(ordersSortBy === 'enteredBy', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('customer')}>
+                              Customer{getSortIndicator(ordersSortBy === 'customer', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('mobile')}>
+                              Mobile{getSortIndicator(ordersSortBy === 'mobile', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('pickup')}>
+                              Pickup Location{getSortIndicator(ordersSortBy === 'pickup', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('packets')}>
+                              Total Packets{getSortIndicator(ordersSortBy === 'packets', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('notes')}>
+                              Notes{getSortIndicator(ordersSortBy === 'notes', ordersSortDir)}
+                            </button>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {pagedOrders.map((order: any) => {
                           const totals = getOrderMealTotals(order);
-                          const meals = [
-                            { label: 'Chicken', value: totals.chicken },
-                            { label: 'Fish', value: totals.fish },
-                            { label: 'Veg', value: totals.veg },
-                            { label: 'Egg', value: totals.egg },
-                            { label: 'Other', value: totals.other },
-                          ].filter((meal) => meal.value > 0);
                           const createdBy = order.createdBy;
                           const mainCollector =
                             createdBy?.mainCollector && createdBy.mainCollector.id !== createdBy.id
@@ -906,8 +1130,8 @@ export default function DispatchPage() {
                             '-';
                           return (
                             <TableRow key={order.id}>
+                              <TableCell>{getName(mainCollector || createdBy)}</TableCell>
                               <TableCell>{getName(createdBy)}</TableCell>
-                              <TableCell>{getName(mainCollector)}</TableCell>
                               <TableCell>
                                 <button
                                   type="button"
@@ -922,19 +1146,6 @@ export default function DispatchPage() {
                               </TableCell>
                               <TableCell>{pickupName}</TableCell>
                               <TableCell className="font-medium">{totals.total}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  {meals.length === 0 ? (
-                                    <span className="text-xs text-muted-foreground">No meals</span>
-                                  ) : (
-                                    meals.map((meal) => (
-                                      <Badge key={meal.label} variant="secondary">
-                                        {meal.label} {meal.value}
-                                      </Badge>
-                                    ))
-                                  )}
-                                </div>
-                              </TableCell>
                               <TableCell className="max-w-[240px] truncate text-muted-foreground">
                                 {order.note || '-'}
                               </TableCell>

@@ -42,7 +42,6 @@ export default function CustomerSearchPage() {
   const [form, setForm] = useState({
     name: '',
     mobile: '',
-    address: '',
   });
 
   useEffect(() => {
@@ -112,7 +111,6 @@ export default function CustomerSearchPage() {
     setForm({
       name: editingCustomer.name || '',
       mobile: normalizeAuMobile(editingCustomer.mobile || ''),
-      address: editingCustomer.address || '',
     });
   }, [editingCustomer]);
 
@@ -121,15 +119,13 @@ export default function CustomerSearchPage() {
     const current = {
       name: (form.name || '').trim(),
       mobile: normalizeAuMobile(form.mobile || ''),
-      address: (form.address || '').trim(),
     };
     const original = {
       name: (editingCustomer.name || '').trim(),
       mobile: normalizeAuMobile(editingCustomer.mobile || ''),
-      address: (editingCustomer.address || '').trim(),
     };
     return JSON.stringify(current) !== JSON.stringify(original);
-  }, [editingCustomer, editingId, form.address, form.name, form.mobile]);
+  }, [editingCustomer, editingId, form.name, form.mobile]);
 
   useEffect(() => {
     setCustomersPage(1);
@@ -143,7 +139,6 @@ export default function CustomerSearchPage() {
     setForm({
       name: '',
       mobile: '',
-      address: '',
     });
     setEditingId(null);
     setShowAdd(false);
@@ -158,13 +153,11 @@ export default function CustomerSearchPage() {
         await api.post(`/customers/${editingId}`, {
           name: form.name,
           mobile: form.mobile,
-          address: form.address || undefined,
         });
       } else {
         await api.post('/customers', {
           name: form.name,
           mobile: form.mobile,
-          address: form.address || undefined,
         });
       }
       await queryClient.invalidateQueries({ queryKey: ['customer-search'] });
@@ -282,12 +275,11 @@ export default function CustomerSearchPage() {
           ) : (
             <div className="space-y-3">
               <div className="w-full overflow-x-auto">
-                <Table className="min-w-[1400px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
+                <Table className="min-w-[1200px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Mobile</TableHead>
-                      <TableHead>Address</TableHead>
                       <TableHead>Updated At</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Added By</TableHead>
@@ -295,13 +287,18 @@ export default function CustomerSearchPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pagedCustomers.map((c: any) => (
+                    {pagedCustomers.map((c: any) => {
+                      const hasUsage =
+                        (c._count?.orders || 0) > 0 ||
+                        (c._count?.pickupByOrders || 0) > 0 ||
+                        (c._count?.transporterLocations || 0) > 0 ||
+                        (c._count?.distributorLocations || 0) > 0;
+                      return (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">
                           {c.name}
                         </TableCell>
                         <TableCell>{formatAuMobile(c.mobile || '')}</TableCell>
-                        <TableCell>{c.address || '-'}</TableCell>
                         <TableCell>
                           {c.updatedAt
                             ? new Date(c.updatedAt).toLocaleString(undefined, {
@@ -355,8 +352,13 @@ export default function CustomerSearchPage() {
                                 size="icon"
                                 variant="destructive"
                                 className="h-7 w-7"
-                                disabled={!canDelete}
+                                disabled={!canDelete || hasUsage}
                                 onClick={() => softDelete(c.id)}
+                                title={
+                                  hasUsage
+                                    ? 'Customer is used in the system and cannot be deleted'
+                                    : 'Delete customer'
+                                }
                                 aria-label="Delete customer"
                               >
                                 <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -365,7 +367,8 @@ export default function CustomerSearchPage() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -476,14 +479,6 @@ export default function CustomerSearchPage() {
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                   placeholder="0400000000"
                   required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customer-address">Address</Label>
-                <Input
-                  id="customer-address"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
                 />
               </div>
             </div>

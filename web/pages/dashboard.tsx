@@ -251,6 +251,11 @@ export default function Dashboard() {
     return (allCustomersQuery.data || []).find((c: any) => c.id === selectedCustomerId);
   }, [allCustomersQuery.data, selectedCustomerId]);
 
+  const isAddPickupByDefaultedToSelectedCustomer =
+    !!selectedCustomerId &&
+    orderForm.pickupByCustomerId === selectedCustomerId &&
+    !pickupByLabel;
+
   const getOrderCostForCampaign = (campaign: Campaign | null, order: any) => {
     const chickenCost = campaign?.chickenCost || 0;
     const fishCost = campaign?.fishCost || 0;
@@ -947,22 +952,7 @@ export default function Dashboard() {
                                       : `${order.customer?.name || ''}`.trim()}
                                   </TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-2 whitespace-nowrap">
-                                      <span className="text-sm font-medium">
-                                        Total: {mealDetails.total}
-                                      </span>
-                                      {mealDetails.meals.length === 0 ? (
-                                        <span className="text-xs text-muted-foreground">
-                                          No meals
-                                        </span>
-                                      ) : (
-                                        mealDetails.meals.map((meal) => (
-                                          <Badge key={meal.label} variant="secondary">
-                                            {meal.label} {meal.qty}
-                                          </Badge>
-                                        ))
-                                      )}
-                                    </div>
+                                    <span className="text-sm font-medium">{mealDetails.total}</span>
                                   </TableCell>
                                   <TableCell className="text-right">
                                     {getOrderCost(order).toFixed(2)}
@@ -1261,6 +1251,9 @@ export default function Dashboard() {
                 {selectedCustomer && (
                   <div className="text-sm text-muted-foreground">
                     Selected: {selectedCustomer.name}
+                    {selectedCustomer.mobile
+                      ? ` (${formatAuMobile(selectedCustomer.mobile) || selectedCustomer.mobile})`
+                      : ''}
                   </div>
                 )}
                 {addExistingOrderId && (
@@ -1289,14 +1282,21 @@ export default function Dashboard() {
                   onOpenChange={setAddPickupByOpen}
                   label={pickupByLabel || 'Select pickup person'}
                 />
-                <div className="text-sm text-muted-foreground">
-                  Pickup by:{' '}
-                  {orderForm.pickupByCustomerId
-                    ? pickupByLabel || 'Selected'
-                    : selectedCustomerId
-                    ? 'Same as customer'
-                    : 'Not selected'}
-                </div>
+                {isAddPickupByDefaultedToSelectedCustomer ? (
+                  <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                    Defaulted to selected customer
+                    {selectedCustomer?.name ? `: ${selectedCustomer.name}` : ''}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Pickup by:{' '}
+                    {orderForm.pickupByCustomerId
+                      ? pickupByLabel || 'Selected'
+                      : selectedCustomerId
+                      ? 'Same as customer'
+                      : 'Not selected'}
+                  </div>
+                )}
               </div>
               <div className="space-y-3 rounded-md border bg-muted/20 p-4">
                 <div className="flex min-h-[32px] items-center justify-between gap-2 border-b pb-2">
@@ -1312,68 +1312,19 @@ export default function Dashboard() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="dash-add-chicken">Chicken</Label>
-                <Input
-                  id="dash-add-chicken"
-                  type="number"
-                  min={0}
-                  value={orderForm.chickenQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, chickenQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders || !!addExistingOrderId}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dash-add-fish">Fish</Label>
-                <Input
-                  id="dash-add-fish"
-                  type="number"
-                  min={0}
-                  value={orderForm.fishQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, fishQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders || !!addExistingOrderId}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 md:max-w-[220px]">
               <div className="space-y-2">
                 <Label htmlFor="dash-add-veg">Veg</Label>
                 <Input
                   id="dash-add-veg"
                   type="number"
                   min={0}
-                  value={orderForm.vegQty}
+                  value={orderForm.vegQty === 0 ? '' : orderForm.vegQty}
                   onChange={(e) =>
-                    setOrderForm({ ...orderForm, vegQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders || !!addExistingOrderId}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dash-add-egg">Egg</Label>
-                <Input
-                  id="dash-add-egg"
-                  type="number"
-                  min={0}
-                  value={orderForm.eggQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, eggQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders || !!addExistingOrderId}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dash-add-other">Other</Label>
-                <Input
-                  id="dash-add-other"
-                  type="number"
-                  min={0}
-                  value={orderForm.otherQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, otherQty: Number(e.target.value) })
+                    setOrderForm({
+                      ...orderForm,
+                      vegQty: e.target.value === '' ? 0 : Number(e.target.value),
+                    })
                   }
                   disabled={!canCreateOrders || !!addExistingOrderId}
                 />
@@ -1459,33 +1410,7 @@ export default function Dashboard() {
               Pickup by:{' '}
               {editForm.pickupByCustomerId ? editPickupByLabel || 'Selected' : 'Same as customer'}
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="dash-edit-chicken">Chicken</Label>
-                <Input
-                  id="dash-edit-chicken"
-                  type="number"
-                  min={0}
-                  value={editForm.chickenQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, chickenQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dash-edit-fish">Fish</Label>
-                <Input
-                  id="dash-edit-fish"
-                  type="number"
-                  min={0}
-                  value={editForm.fishQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, fishQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 md:max-w-[220px]">
               <div className="space-y-2">
                 <Label htmlFor="dash-edit-veg">Veg</Label>
                 <Input
@@ -1495,32 +1420,6 @@ export default function Dashboard() {
                   value={editForm.vegQty}
                   onChange={(e) =>
                     setEditForm({ ...editForm, vegQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dash-edit-egg">Egg</Label>
-                <Input
-                  id="dash-edit-egg"
-                  type="number"
-                  min={0}
-                  value={editForm.eggQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, eggQty: Number(e.target.value) })
-                  }
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dash-edit-other">Other</Label>
-                <Input
-                  id="dash-edit-other"
-                  type="number"
-                  min={0}
-                  value={editForm.otherQty}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, otherQty: Number(e.target.value) })
                   }
                   disabled={!canEditOrders}
                 />

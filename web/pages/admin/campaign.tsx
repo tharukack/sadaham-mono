@@ -251,6 +251,11 @@ export default function CampaignPage() {
     return (customers || []).find((c: any) => c.id === selectedCustomerId);
   }, [customers, selectedCustomerId]);
 
+  const isAddPickupByDefaultedToSelectedCustomer =
+    !!selectedCustomerId &&
+    orderForm.pickupByCustomerId === selectedCustomerId &&
+    !pickupByLabel;
+
   const existingOrderForCustomer = useMemo(() => {
     if (!currentCampaign || !selectedCustomerId) return null;
     return (orders || []).find(
@@ -1417,41 +1422,7 @@ export default function CampaignPage() {
                 disabled={!isAdmin}
               />
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="campaign-cost-chicken">Chicken Cost</Label>
-                <Input
-                  id="campaign-cost-chicken"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={campaignForm.chickenCost}
-                  onChange={(e) =>
-                    setCampaignForm({
-                      ...campaignForm,
-                      chickenCost: Number(e.target.value),
-                    })
-                  }
-                  disabled={!isAdmin}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="campaign-cost-fish">Fish Cost</Label>
-                <Input
-                  id="campaign-cost-fish"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={campaignForm.fishCost}
-                  onChange={(e) =>
-                    setCampaignForm({
-                      ...campaignForm,
-                      fishCost: Number(e.target.value),
-                    })
-                  }
-                  disabled={!isAdmin}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-4 md:max-w-[220px]">
               <div className="space-y-2">
                 <Label htmlFor="campaign-cost-veg">Veg Cost</Label>
                 <Input
@@ -1464,40 +1435,6 @@ export default function CampaignPage() {
                     setCampaignForm({
                       ...campaignForm,
                       vegCost: Number(e.target.value),
-                    })
-                  }
-                  disabled={!isAdmin}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="campaign-cost-egg">Egg Cost</Label>
-                <Input
-                  id="campaign-cost-egg"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={campaignForm.eggCost}
-                  onChange={(e) =>
-                    setCampaignForm({
-                      ...campaignForm,
-                      eggCost: Number(e.target.value),
-                    })
-                  }
-                  disabled={!isAdmin}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="campaign-cost-other">Other Cost</Label>
-                <Input
-                  id="campaign-cost-other"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={campaignForm.otherCost}
-                  onChange={(e) =>
-                    setCampaignForm({
-                      ...campaignForm,
-                      otherCost: Number(e.target.value),
                     })
                   }
                   disabled={!isAdmin}
@@ -1615,6 +1552,9 @@ export default function CampaignPage() {
             {selectedCustomer && (
               <div className="text-sm text-muted-foreground">
                 Selected: {selectedCustomer.name}
+                {selectedCustomer.mobile
+                  ? ` (${formatAuMobile(selectedCustomer.mobile) || selectedCustomer.mobile})`
+                  : ''}
               </div>
             )}
             <div className="space-y-2">
@@ -1673,14 +1613,21 @@ export default function CampaignPage() {
                 )}
               </div>
             )}
-            <div className="text-sm text-muted-foreground">
-              Pickup by:{' '}
-              {orderForm.pickupByCustomerId
-                ? pickupByLabel || 'Selected'
-                : selectedCustomerId
-                ? 'Same as customer'
-                : 'Not selected'}
-            </div>
+            {isAddPickupByDefaultedToSelectedCustomer ? (
+              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                Defaulted to selected customer
+                {selectedCustomer?.name ? `: ${selectedCustomer.name}` : ''}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Pickup by:{' '}
+                {orderForm.pickupByCustomerId
+                  ? pickupByLabel || 'Selected'
+                  : selectedCustomerId
+                  ? 'Same as customer'
+                  : 'Not selected'}
+              </div>
+            )}
             {existingOrderForCustomer && (
               <div className="text-sm text-amber-700">
                 This customer already has an order in this campaign. Editing existing order.
@@ -1699,68 +1646,19 @@ export default function CampaignPage() {
                 <p className="text-xs text-muted-foreground">Loading locations...</p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="add-chicken">Chicken</Label>
-                <Input
-                  id="add-chicken"
-                  type="number"
-                  min={0}
-                  value={orderForm.chickenQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, chickenQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-fish">Fish</Label>
-                <Input
-                  id="add-fish"
-                  type="number"
-                  min={0}
-                  value={orderForm.fishQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, fishQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 md:max-w-[220px]">
               <div className="space-y-2">
                 <Label htmlFor="add-veg">Veg</Label>
                 <Input
                   id="add-veg"
                   type="number"
                   min={0}
-                  value={orderForm.vegQty}
+                  value={orderForm.vegQty === 0 ? '' : orderForm.vegQty}
                   onChange={(e) =>
-                    setOrderForm({ ...orderForm, vegQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-egg">Egg</Label>
-                <Input
-                  id="add-egg"
-                  type="number"
-                  min={0}
-                  value={orderForm.eggQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, eggQty: Number(e.target.value) })
-                  }
-                  disabled={!canCreateOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-other">Other</Label>
-                <Input
-                  id="add-other"
-                  type="number"
-                  min={0}
-                  value={orderForm.otherQty}
-                  onChange={(e) =>
-                    setOrderForm({ ...orderForm, otherQty: Number(e.target.value) })
+                    setOrderForm({
+                      ...orderForm,
+                      vegQty: e.target.value === '' ? 0 : Number(e.target.value),
+                    })
                   }
                   disabled={!canCreateOrders}
                 />
