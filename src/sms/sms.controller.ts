@@ -17,7 +17,7 @@ export class SmsController {
   constructor(private smsService: SmsService) {}
 
   @Get('templates')
-  @Roles(Role.SUPERADMIN)
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
   listTemplates() {
     return this.smsService.listTemplates();
   }

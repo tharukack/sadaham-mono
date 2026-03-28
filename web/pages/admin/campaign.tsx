@@ -124,6 +124,26 @@ export default function CampaignPage() {
       day: '2-digit',
     });
   };
+  const escapeCsvValue = (value: string | number) => {
+    const text = String(value ?? '');
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  };
+  const downloadCsv = (filename: string, rows: Array<Array<string | number>>) => {
+    if (typeof window === 'undefined') return;
+    const csv = rows.map((row) => row.map(escapeCsvValue).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -246,6 +266,9 @@ export default function CampaignPage() {
       : currentCampaign?.state === 'FROZEN'
       ? isAdmin
       : false;
+  const hasOngoingCampaign =
+    !!currentCampaign &&
+    (currentCampaign.state === 'STARTED' || currentCampaign.state === 'FROZEN');
 
   const selectedCustomer = useMemo(() => {
     return (customers || []).find((c: any) => c.id === selectedCustomerId);
@@ -516,6 +539,82 @@ export default function CampaignPage() {
     }
   };
 
+  const exportExpandedCampaignOrdersCsv = () => {
+    const campaign = (campaignList || []).find((c: any) => c.id === expandedCampaignId);
+    if (!campaign) return;
+    const visibleOrders = (orders || []).filter((o: any) => o.campaignId === campaign.id);
+    const sortedOrders = [...visibleOrders].sort((a: any, b: any) => {
+      if (expandedOrdersSortBy === 'name') {
+        const aName = `${a.customer?.name || ''}`.trim();
+        const bName = `${b.customer?.name || ''}`.trim();
+        return aName.localeCompare(bName);
+      }
+      const aDate = new Date(
+        expandedOrdersSortBy === 'created' ? a.createdAt || 0 : a.updatedAt || 0,
+      ).getTime();
+      const bDate = new Date(
+        expandedOrdersSortBy === 'created' ? b.createdAt || 0 : b.updatedAt || 0,
+      ).getTime();
+      return bDate - aDate;
+    });
+    const rows: Array<Array<string | number>> = [
+      [
+        'Customer',
+        'Mobile',
+        'Created By',
+        'Edited By',
+        'Modified',
+        'Total Packets',
+        'Collection Point',
+        'Pickup By',
+        'Notes',
+      ],
+    ];
+    sortedOrders.forEach((order: any) => {
+      const totalPackets =
+        Number(order.chickenQty || 0) +
+        Number(order.fishQty || 0) +
+        Number(order.vegQty || 0) +
+        Number(order.eggQty || 0) +
+        Number(order.otherQty || 0);
+      const createdBy = order.createdBy
+        ? `${order.createdBy.firstName} ${order.createdBy.lastName}`.trim()
+        : 'Unknown';
+      const updatedBy = order.updatedBy
+        ? `${order.updatedBy.firstName} ${order.updatedBy.lastName}`.trim()
+        : 'Unknown';
+      const pickupBy = order.pickupByCustomer
+        ? `${order.pickupByCustomer.name || ''}`.trim()
+        : `${order.customer?.name || ''}`.trim();
+      rows.push([
+        order.customer?.name || 'Unknown',
+        formatAuMobile(order.customer?.mobile || '') || 'Unknown',
+        createdBy,
+        updatedBy,
+        order.updatedAt
+          ? new Date(order.updatedAt).toLocaleString(undefined, {
+              year: 'numeric',
+              month: 'short',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '-',
+        totalPackets,
+        order.pickupLocation?.name || 'Unknown',
+        pickupBy || 'Unknown',
+        order.note || '',
+      ]);
+    });
+    const campaignLabel =
+      `${campaign.name || 'campaign'}`
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'campaign';
+    downloadCsv(`${campaignLabel}-orders.csv`, rows);
+  };
+
 
   const updateState = async (id: string, state: string) => {
     if (!isAdmin) return;
@@ -728,6 +827,7 @@ export default function CampaignPage() {
           </div>
           {isAdmin && (
             <Button
+              disabled={hasOngoingCampaign}
               onClick={() => {
                 setEditingCampaign(null);
                 setCampaignForm({
@@ -747,6 +847,11 @@ export default function CampaignPage() {
           )}
         </CardHeader>
         <CardContent className="space-y-4">
+          {isAdmin && hasOngoingCampaign && (
+            <div className="text-sm text-muted-foreground">
+              Finish the current ongoing campaign before creating a new one.
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={campaignSearch}
@@ -1178,7 +1283,17 @@ export default function CampaignPage() {
               );
               return (
                 <>
-                  <div className="text-sm font-medium">Orders</div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-medium">Orders</div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={exportExpandedCampaignOrdersCsv}
+                      disabled={visibleOrders.length === 0}
+                    >
+                      Export CSV
+                    </Button>
+                  </div>
                   {isOrdersLoading ? (
                     <div className="text-sm text-muted-foreground">Loading orders...</div>
                   ) : visibleOrders.length === 0 ? (

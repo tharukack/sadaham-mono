@@ -86,7 +86,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <aside className="flex h-full w-full flex-col gap-6 p-4">
       <div className="px-2">
-        <div className="text-lg font-semibold">Sadaham Sewana</div>
+        <div className="flex items-center gap-3">
+          <img
+            src="/favicon.png"
+            alt="Sadaham Sewana logo"
+            className="h-8 w-8 rounded-md object-cover shadow-sm"
+          />
+          <div className="text-lg font-semibold">Sadaham Sewana</div>
+        </div>
         <div className="text-xs text-muted-foreground">Order management console</div>
       </div>
       <div className="flex flex-1 flex-col gap-6">

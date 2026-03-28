@@ -13,6 +13,8 @@ import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AuthService {
+  private readonly maxActiveSessionsPerUser = 5;
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -89,16 +91,24 @@ export class AuthService {
       where: { id: activeOtp.id },
       data: { consumedAt: new Date() },
     });
-    await this.prisma.userSession.updateMany({
-      where: { userId: user.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
     const session = await this.prisma.userSession.create({
       data: { userId: user.id },
     });
+    const activeSessions = await this.prisma.userSession.findMany({
+      where: { userId: user.id, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    const sessionsToRevoke = activeSessions.slice(this.maxActiveSessionsPerUser);
+    if (sessionsToRevoke.length > 0) {
+      await this.prisma.userSession.updateMany({
+        where: { id: { in: sessionsToRevoke.map((item) => item.id) } },
+        data: { revokedAt: new Date() },
+      });
+    }
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, role: user.role, sessionId: session.id, mustChangePassword: user.mustChangePassword },
-      { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '12h' },
+      { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '24h' },
     );
     const userSummary = this.buildUserSummary(user);
     return {
@@ -115,9 +125,15 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid user');
     }
-    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valid) {
-      throw new UnauthorizedException('Invalid credentials');
+    if (user.mustChangePassword) {
+      // Forced password setup uses the authenticated session as proof instead of re-entering the old password.
+    } else {
+      const valid = dto.currentPassword
+        ? await bcrypt.compare(dto.currentPassword, user.passwordHash)
+        : false;
+      if (!valid) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
     }
     const passwordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.prisma.user.update({
@@ -127,7 +143,7 @@ export class AuthService {
     await this.audit.log(userId, 'User', userId, 'PASSWORD_CHANGED', {});
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, role: user.role, sessionId, mustChangePassword: false },
-      { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '12h' },
+      { secret: this.config.get<string>('JWT_SECRET'), expiresIn: '24h' },
     );
     return { accessToken, mustChangePassword: false };
   }

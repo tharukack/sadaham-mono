@@ -1,6 +1,7 @@
 import { Menu } from 'lucide-react';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '../ui/button';
 import {
@@ -21,6 +22,10 @@ export function Topbar({ title }: { title: string }) {
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any | null>(null);
+  const currentCampaignQuery = useQuery({
+    queryKey: ['campaign-current'],
+    queryFn: async () => (await api.get('/campaigns/current')).data,
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -44,6 +49,23 @@ export function Topbar({ title }: { title: string }) {
     const name = `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim();
     return name || 'Account';
   }, [userProfile]);
+
+  const campaignHeaderText = useMemo(() => {
+    const eventDateRaw = currentCampaignQuery.data?.eventDate;
+    if (!eventDateRaw) return '';
+    const eventDate = new Date(eventDateRaw);
+    if (Number.isNaN(eventDate.getTime())) return '';
+    const cutoffDate = new Date(eventDate);
+    cutoffDate.setDate(cutoffDate.getDate() - 7);
+    const formatDate = (value: Date) =>
+      value.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    return `Next Lunch Packet Drive ${formatDate(eventDate)} - Order Cut Off ${formatDate(cutoffDate)}`;
+  }, [currentCampaignQuery.data?.eventDate]);
+
   const handleLogout = async () => {
     if (typeof window === 'undefined') return;
     try {
@@ -57,7 +79,7 @@ export function Topbar({ title }: { title: string }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-background px-4 py-3 sm:px-6 sm:py-4">
+    <div className="relative flex flex-wrap items-center justify-between gap-4 border-b bg-background px-4 py-3 sm:px-6 sm:py-4">
       <div className="flex min-w-0 items-center gap-3">
         <Sheet>
           <SheetTrigger asChild>
@@ -71,6 +93,11 @@ export function Topbar({ title }: { title: string }) {
         </Sheet>
         <div className="truncate text-lg font-semibold">{title}</div>
       </div>
+      {campaignHeaderText && (
+        <div className="order-last w-full text-center text-sm font-medium text-slate-700 md:absolute md:left-1/2 md:top-1/2 md:w-auto md:-translate-x-1/2 md:-translate-y-1/2 md:px-4">
+          {campaignHeaderText}
+        </div>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="flex items-center gap-2">

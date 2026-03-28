@@ -106,7 +106,7 @@ export default function DispatchPage() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState<'10' | '20' | '50' | '100' | 'all'>('10');
   const [ordersSortBy, setOrdersSortBy] = useState<
-    'created' | 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
+    'created' | 'mainCollector' | 'enteredBy' | 'customer' | 'pickupBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
   >('created');
   const [ordersSortDir, setOrdersSortDir] = useState<'asc' | 'desc'>('asc');
   const [systemUserFilter, setSystemUserFilter] = useState<string>('all');
@@ -341,6 +341,8 @@ export default function DispatchPage() {
           : null;
       const aPickup = locations.find((loc: any) => loc.id === a.pickupLocationId)?.name || '';
       const bPickup = locations.find((loc: any) => loc.id === b.pickupLocationId)?.name || '';
+      const aPickupBy = a.pickupByCustomer ? getName(a.pickupByCustomer) : getName(a.customer);
+      const bPickupBy = b.pickupByCustomer ? getName(b.pickupByCustomer) : getName(b.customer);
       const aTotals = getOrderMealTotals(a);
       const bTotals = getOrderMealTotals(b);
       let result = 0;
@@ -359,6 +361,9 @@ export default function DispatchPage() {
           break;
         case 'customer':
           result = compareText(getName(a.customer), getName(b.customer));
+          break;
+        case 'pickupBy':
+          result = compareText(aPickupBy, bPickupBy);
           break;
         case 'mobile':
           result = compareText(formatAuMobile(a.customer?.mobile || '') || '', formatAuMobile(b.customer?.mobile || '') || '');
@@ -411,7 +416,7 @@ export default function DispatchPage() {
   };
 
   const toggleOrdersSort = (
-    column: 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
+    column: 'mainCollector' | 'enteredBy' | 'customer' | 'pickupBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
   ) => {
     if (ordersSortBy === column) {
       setOrdersSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -537,6 +542,44 @@ export default function DispatchPage() {
     });
     const pickupLabel = toFileSafeName(selectedPickupName || 'pickup');
     downloadCsv(`pickup-orders-${campaignFileLabel}-${pickupLabel}.csv`, rows);
+  };
+
+  const exportAllOrdersCsv = () => {
+    const rows: Array<Array<unknown>> = [
+      [
+        'Main Collector',
+        'Entered By',
+        'Customer',
+        'Order Pickup By',
+        'Customer Mobile',
+        'Pickup Location',
+        'Total Packets',
+        'Veg',
+        'Notes',
+      ],
+    ];
+
+    sortedOrders.forEach((order: any) => {
+      const createdBy = order.createdBy;
+      const mainCollector =
+        createdBy?.mainCollector && createdBy.mainCollector.id !== createdBy.id
+          ? createdBy.mainCollector
+          : null;
+      const totals = getOrderMealTotals(order);
+      rows.push([
+        getName(mainCollector || createdBy),
+        getName(createdBy),
+        getName(order.customer),
+        order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer),
+        formatAuMobile(order.customer?.mobile || '') || '',
+        order.pickupLocation?.name || '-',
+        totals.total,
+        blankIfZero(totals.veg),
+        order.note || '',
+      ]);
+    });
+
+    downloadCsv(`all-orders-${campaignFileLabel}.csv`, rows);
   };
 
   return (
@@ -987,6 +1030,20 @@ export default function DispatchPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={exportAllOrdersCsv}
+                  disabled={
+                    locationsQuery.isLoading ||
+                    ordersQuery.isLoading ||
+                    currentCampaignQuery.isLoading ||
+                    !currentCampaignQuery.data ||
+                    sortedOrders.length === 0
+                  }
+                >
+                  Export CSV
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -1096,6 +1153,11 @@ export default function DispatchPage() {
                             </button>
                           </TableHead>
                           <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('pickupBy')}>
+                              Order Pickup By{getSortIndicator(ordersSortBy === 'pickupBy', ordersSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
                             <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleOrdersSort('mobile')}>
                               Mobile{getSortIndicator(ordersSortBy === 'mobile', ordersSortDir)}
                             </button>
@@ -1140,6 +1202,11 @@ export default function DispatchPage() {
                                 >
                                   {getName(order.customer)}
                                 </button>
+                              </TableCell>
+                              <TableCell>
+                                {order.pickupByCustomer
+                                  ? getName(order.pickupByCustomer)
+                                  : getName(order.customer)}
                               </TableCell>
                               <TableCell>
                                 {formatAuMobile(order.customer?.mobile || '') || '-'}

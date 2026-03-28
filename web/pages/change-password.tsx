@@ -10,8 +10,8 @@ import { KeyRound } from 'lucide-react';
 import { getStoredUser, setStoredUser, clearStoredSession } from '../lib/session';
 
 export default function ChangePasswordPage() {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
@@ -44,9 +44,17 @@ export default function ChangePasswordPage() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast({
+        variant: 'destructive',
+        title: 'Passwords do not match',
+        description: 'Please enter the same new password in both fields.',
+      });
+      return;
+    }
     setLoading(true);
     try {
-      await api.post('/auth/change-password', { currentPassword, newPassword });
+      await api.post('/auth/change-password', { newPassword });
       const currentUser = getStoredUser();
       if (currentUser) {
         setStoredUser({ ...currentUser, mustChangePassword: false });
@@ -99,16 +107,6 @@ export default function ChangePasswordPage() {
           <CardContent>
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="bg-white/80"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="new-password">New Password</Label>
                 <Input
                   id="new-password"
@@ -119,10 +117,21 @@ export default function ChangePasswordPage() {
                   className="bg-white/80"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={8}
+                  className="bg-white/80"
+                />
+              </div>
               <Button
                 className="w-full rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800"
                 type="submit"
-                disabled={loading}
+                disabled={loading || !newPassword || !confirmPassword}
               >
                 {loading ? 'Updating...' : 'Update Password'}
               </Button>
