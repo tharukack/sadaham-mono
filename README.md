@@ -37,92 +37,50 @@ Default seeded admin for quick testing:
 
 API docs and resources are organized by modules under `src/`, while the frontend lives in `web/` using Next.js and React Query.
 
-## PostgreSQL Backups (Hourly -> Gzip -> Google Drive)
+## PostgreSQL Backups (30 Minutes Change Check -> 7 Day Safety Backup -> Google Drive)
 
-This project includes a production-safe backup script that uses `pg_dump`, compresses with `gzip`, uploads to Google Drive via `rclone`, and logs results. It is safe to run hourly from cron and avoids overwriting existing backup files.
+The backup flow now runs as a dedicated `backup` Docker service whenever the Docker stack is up. Docker Compose maps the runtime directory and credentials into container paths automatically.
 
-### Prerequisites
+Behavior:
 
-- PostgreSQL client tools (`pg_dump`, `psql`)
-- `rclone` configured with a Google Drive remote
-- A cron-enabled environment (Linux/macOS)
+- checks the database every 30 minutes,
+- uploads a new backup immediately when the dump content changes,
+- forces a backup every 7 days even if nothing changed,
+- stores backups in the visible Google Drive folder `sadaham_backup_dev/YYYY-MM-DD/`,
+- deletes only backups older than 6 months,
+- writes backup events into `.backup-runtime` so the admin audit screen can show status history.
 
-### Install PostgreSQL Client Tools
-
-Ubuntu/Debian:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y postgresql-client
-```
-
-macOS (Homebrew):
+### Required Environment
 
 ```bash
-brew install libpq
-brew link --force libpq
+BACKUP_DRIVE_ROOT_FOLDER=sadaham_backup_dev
+BACKUP_RETENTION_MONTHS=6
+BACKUP_UNCHANGED_INTERVAL_DAYS=7
+BACKUP_CHECK_INTERVAL_MINUTES=30
+BACKUP_RUNTIME_DIR=.backup-runtime
+GOOGLE_DRIVE_CREDENTIALS_FILE=credentials.json
 ```
 
-### Install and Configure rclone for Google Drive
+### Docker Requirements
 
-1. Install rclone from https://rclone.org/downloads/
-2. Run configuration and create a Google Drive remote:
+- Keep `credentials.json` in the project root.
+- Share the Google Drive folder `sadaham_backup_dev` with the service account email from `credentials.json` if you want uploads to land in a folder visible in your own Drive UI.
+- Bring the stack up with Docker Compose so the `backup` service stays running.
+
+### Manual Backup Run
 
 ```bash
-rclone config
+pnpm run backup:drive
 ```
 
-3. Use the remote name in `RCLONE_REMOTE` (see `.env.backup`).
+### Restore Manually
 
-### Configure Environment
-
-1. Copy the example file and update values:
+1. Download the latest `.sql.gz` file from Google Drive.
+2. Restore it into PostgreSQL:
 
 ```bash
-cp .env.backup .env.backup.local
+gzip -dc backup.sql.gz | psql "postgresql://user:password@localhost:5432/order_management"
 ```
-
-2. Export variables before running the script:
-
-```bash
-set -a
-. ./.env.backup.local
-set +a
-```
-
-### Test the Backup Script Manually
-
-```bash
-chmod +x scripts/backup_postgres_to_gdrive.sh
-scripts/backup_postgres_to_gdrive.sh
-```
-
-### Cron Example (Run Hourly)
-
-```bash
-0 * * * * /absolute/path/to/scripts/backup_postgres_to_gdrive.sh
-```
-
-### Restore Manually (Plain SQL Dump)
-
-1. Download the latest `.sql.gz` backup from Google Drive to your server.
-2. Create a fresh database:
-
-```bash
-createdb -h $PGHOST -p $PGPORT -U $PGUSER your_database_name
-```
-
-3. Restore the backup:
-
-```bash
-gunzip -c /path/to/backup.sql.gz | psql -h $PGHOST -p $PGPORT -U $PGUSER -d your_database_name
-```
-
-This will recreate schema and data from the plain SQL dump.
-
-
-
-
 
 ##Production setup
 
@@ -143,4 +101,3 @@ docker compose --env-file .env exec api npx prisma migrate deploy
 docker compose --env-file .env exec api npx prisma db seed
 
 docker compose --env-file .env exec api node prisma/import-customers.js
-

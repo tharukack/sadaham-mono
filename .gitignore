@@ -12,6 +12,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+credentials.json
+.backup-runtime/
+
 *.log
 logs/
 
@@ -31,3 +34,4 @@ Thumbs.db
 .idea/
 .vscode/
 *.pnpm-store
+

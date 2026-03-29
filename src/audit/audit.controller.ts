@@ -22,4 +22,18 @@ export class AuditController {
       sortDir: sortDir === 'asc' ? 'asc' : 'desc',
     });
   }
+
+  @Get('backups')
+  @Roles(Role.SUPERADMIN)
+  listBackups(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sortDir') sortDir?: string,
+  ) {
+    return this.auditService.listBackups({
+      page: Number(page) || 1,
+      pageSize: Number(pageSize) || 50,
+      sortDir: sortDir === 'asc' ? 'asc' : 'desc',
+    });
+  }
 }

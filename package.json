@@ -10,6 +10,7 @@
     "dev:web": "pnpm --filter order-management-web dev",
     "build": "pnpm prisma:generate && tsc -p tsconfig.json",
     "start": "node dist/main.js",
+    "backup:drive": "node infra/backup/drive-backup.js",
     "lint": "echo 'linting not configured'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

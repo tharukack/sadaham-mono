@@ -30,11 +30,41 @@ services:
       SMS_BATCH_WORKER: ${SMS_BATCH_WORKER}
       SMS_BATCH_WORKER_INTERVAL_MS: ${SMS_BATCH_WORKER_INTERVAL_MS}
       SMS_BATCH_WORKER_LIMIT: ${SMS_BATCH_WORKER_LIMIT}
+      BACKUP_RUNTIME_DIR: /app/.backup-runtime
+      BACKUP_DRIVE_ROOT_FOLDER: ${BACKUP_DRIVE_ROOT_FOLDER}
+      BACKUP_RETENTION_MONTHS: ${BACKUP_RETENTION_MONTHS}
+      BACKUP_UNCHANGED_INTERVAL_DAYS: ${BACKUP_UNCHANGED_INTERVAL_DAYS}
+      BACKUP_CHECK_INTERVAL_MINUTES: ${BACKUP_CHECK_INTERVAL_MINUTES}
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - backup_runtime:/app/.backup-runtime
     expose:
       - "4000"
+    restart: unless-stopped
+
+  backup:
+    build:
+      context: .
+      dockerfile: infra/backup/Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      BACKUP_RUNTIME_DIR: /app/.backup-runtime
+      BACKUP_DRIVE_ROOT_FOLDER: ${BACKUP_DRIVE_ROOT_FOLDER}
+      BACKUP_RETENTION_MONTHS: ${BACKUP_RETENTION_MONTHS}
+      BACKUP_UNCHANGED_INTERVAL_DAYS: ${BACKUP_UNCHANGED_INTERVAL_DAYS}
+      BACKUP_CHECK_INTERVAL_MINUTES: ${BACKUP_CHECK_INTERVAL_MINUTES}
+      GOOGLE_DRIVE_CREDENTIALS_FILE: /app/credentials.json
+      PG_DUMP_COMMAND: /usr/lib/postgresql/16/bin/pg_dump
+      TZ: ${TZ}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./credentials.json:/app/credentials.json:ro
+      - backup_runtime:/app/.backup-runtime
     restart: unless-stopped
 
   web:
@@ -70,5 +100,6 @@ services:
 
 volumes:
   postgres_data:
+  backup_runtime:
   caddy_data:
   caddy_config:
