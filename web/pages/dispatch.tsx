@@ -812,7 +812,7 @@ export default function DispatchPage() {
                   <SelectTrigger className="w-full md:w-[280px]">
                     <SelectValue placeholder="Select pickup location" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent viewportClassName="max-h-[19rem]">
                     <SelectItem value={ALL_PICKUP_POINTS}>All pickup points</SelectItem>
                     {locations.map((loc: any) => (
                       <SelectItem key={loc.id} value={loc.id}>
@@ -1002,7 +1002,7 @@ export default function DispatchPage() {
                   <SelectTrigger className="w-full md:w-[220px]">
                     <SelectValue placeholder="System user" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent viewportClassName="max-h-[19rem]">
                     <SelectItem value="all">All collectors</SelectItem>
                     {systemUsers.map((user) => (
                       <SelectItem key={user.id} value={user.id}>
@@ -1021,7 +1021,7 @@ export default function DispatchPage() {
                   <SelectTrigger className="w-full md:w-[220px]">
                     <SelectValue placeholder="Main user" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent viewportClassName="max-h-[19rem]">
                     <SelectItem value="all">All main collectors</SelectItem>
                     {mainUsers.map((user) => (
                       <SelectItem key={user.id} value={user.id}>
@@ -1103,10 +1103,10 @@ export default function DispatchPage() {
                           <SelectContent align="start">
                             <SelectItem value="created:desc">Newest first</SelectItem>
                             <SelectItem value="created:asc">Oldest first</SelectItem>
-                            <SelectItem value="customer:asc">Customer A–Z</SelectItem>
-                            <SelectItem value="customer:desc">Customer Z–A</SelectItem>
-                            <SelectItem value="pickup:asc">Pickup A–Z</SelectItem>
-                            <SelectItem value="pickup:desc">Pickup Z–A</SelectItem>
+                            <SelectItem value="customer:asc">Customer A-Z</SelectItem>
+                            <SelectItem value="customer:desc">Customer Z-A</SelectItem>
+                            <SelectItem value="pickup:asc">Pickup A-Z</SelectItem>
+                            <SelectItem value="pickup:desc">Pickup Z-A</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
