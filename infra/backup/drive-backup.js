@@ -484,11 +484,9 @@ async function ensureDriveFolder(token, folderName, parentId) {
       },
     );
 
-    if (existingParent?.mimeType === "application/vnd.google-apps.folder") {
-      return parentId;
+    if (existingParent?.mimeType !== "application/vnd.google-apps.folder") {
+      throw new Error(`Configured Google Drive parent folder was not found or is not a folder: ${parentId}`);
     }
-
-    throw new Error(`Configured Google Drive parent folder was not found or is not a folder: ${parentId}`);
   }
 
   const queryParts = [
@@ -496,6 +494,10 @@ async function ensureDriveFolder(token, folderName, parentId) {
     `name = '${escapeDriveQuery(folderName)}'`,
     "trashed = false",
   ];
+
+  if (parentId) {
+    queryParts.push(`'${parentId}' in parents`);
+  }
 
   const existing = await requestJson(
     `${DRIVE_API_BASE}?${new URLSearchParams({
@@ -514,16 +516,22 @@ async function ensureDriveFolder(token, folderName, parentId) {
     return existing.files[0].id;
   }
 
+  const body = {
+    name: folderName,
+    mimeType: "application/vnd.google-apps.folder",
+  };
+
+  if (parentId) {
+    body.parents = [parentId];
+  }
+
   const created = await requestJson(`${DRIVE_API_BASE}?supportsAllDrives=true`, {
     method: "POST",
     headers: {
       ...driveHeaders(token),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      name: folderName,
-      mimeType: "application/vnd.google-apps.folder",
-    }),
+    body: JSON.stringify(body),
   });
 
   return created.id;
