@@ -114,5 +114,8 @@ docker compose --env-file .env.production exec db sh -lc 'gunzip -c /tmp/backup.
 docker compose --env-file .env.production exec api npx prisma migrate status
 docker compose --env-file .env.production exec api npx prisma migrate deploy
 
+## startup
+sudo systemctl enable docker
+sudo systemctl start docker
 
-
+sudo systemctl status docker
