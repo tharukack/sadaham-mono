@@ -4,30 +4,47 @@ import { CreateTemplateDto } from './dto/create-template.dto';
 import { SendSmsDto } from './dto/send-sms.dto';
 import { ConfigService } from '@nestjs/config';
 import { SmsBatchStatus, SmsMessageType, SmsStatus } from '@prisma/client';
-import twilio from 'twilio';
-import { normalizeAuMobile, toE164AuMobile } from '../common/utils/phone';
+import { normalizeAuMobile } from '../common/utils/phone';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { interpolateOrderTemplate } from './sms.utils';
 
+type MobileMessageSendResult = {
+  to?: string;
+  status?: string;
+  message_id?: string;
+  custom_ref?: string;
+  error?: string;
+};
+
+type MobileMessageSendResponse = {
+  status?: string;
+  send_id?: number;
+  results?: MobileMessageSendResult[];
+};
+
 @Injectable()
 export class SmsService {
-  private twilioClient?: twilio.Twilio;
   private readonly customerMessagesKey = 'customer_messages_enabled';
   private workerEnabled: boolean;
   private workerIntervalMs: number;
   private workerLimit: number;
   private workerTimer: NodeJS.Timeout | null = null;
   private workerRunning = false;
+  private readonly mobileMessageApiUrl = 'https://api.mobilemessage.com.au/v1/messages';
+  private readonly mobileMessageUsername: string;
+  private readonly mobileMessagePassword: string;
+  private readonly mobileMessageSenderId: string;
 
   constructor(private prisma: PrismaService, config: ConfigService) {
     this.workerEnabled = config.get<string>('SMS_BATCH_WORKER') !== 'false';
     this.workerIntervalMs = Number(config.get<string>('SMS_BATCH_WORKER_INTERVAL_MS') || 5000);
     this.workerLimit = Number(config.get<string>('SMS_BATCH_WORKER_LIMIT') || 10);
-    const accountSid = config.get<string>('TWILIO_ACCOUNT_SID') || '';
-    const authToken = config.get<string>('TWILIO_AUTH_TOKEN') || '';
-    if (accountSid && authToken) {
-      this.twilioClient = twilio(accountSid, authToken);
-    }
+    this.mobileMessageUsername = config.get<string>('MM_USERNAME') || '';
+    this.mobileMessagePassword = config.get<string>('MM_PASSWORD') || '';
+    this.mobileMessageSenderId =
+      config.get<string>('MM_SENDER_ID') ||
+      config.get<string>('TWILIO_SENDER_ID') ||
+      '';
   }
 
   onModuleInit() {
@@ -88,12 +105,97 @@ export class SmsService {
     });
   }
 
+  private isMobileMessageConfigured() {
+    return Boolean(
+      this.mobileMessageUsername && this.mobileMessagePassword && this.mobileMessageSenderId,
+    );
+  }
+
+  private hasUnicode(text: string) {
+    return /[^\u0000-\u007f]/.test(text);
+  }
+
+  private getMobileMessageAuthHeader() {
+    const credentials = Buffer.from(
+      `${this.mobileMessageUsername}:${this.mobileMessagePassword}`,
+      'utf8',
+    ).toString('base64');
+    return `Basic ${credentials}`;
+  }
+
+  private async sendViaMobileMessage(messages: Array<{ to: string; body: string; customRef: string }>) {
+    if (!this.isMobileMessageConfigured()) {
+      throw new Error('Mobile Message is not configured. Set MM_USERNAME, MM_PASSWORD, and MM_SENDER_ID.');
+    }
+
+    const response = await fetch(this.mobileMessageApiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: this.getMobileMessageAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        enable_unicode: messages.some((message) => this.hasUnicode(message.body)),
+        messages: messages.map((message) => ({
+          to: message.to,
+          message: message.body,
+          sender: this.mobileMessageSenderId,
+          custom_ref: message.customRef,
+          unicode: this.hasUnicode(message.body) || undefined,
+        })),
+      }),
+    });
+
+    let payload: MobileMessageSendResponse | null = null;
+    try {
+      payload = (await response.json()) as MobileMessageSendResponse;
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      const remoteError = payload?.status || response.statusText || 'SMS send failed.';
+      throw new Error(remoteError);
+    }
+
+    return payload;
+  }
+
+  private async sendSingleMessageRecord(message: { id: string; toMobile: string; body: string }) {
+    try {
+      const response = await this.sendViaMobileMessage([
+        {
+          to: message.toMobile,
+          body: message.body,
+          customRef: message.id,
+        },
+      ]);
+      const result = response?.results?.[0];
+      const wasSuccessful = result?.status === 'success' && !!result?.message_id;
+      await this.prisma.smsMessage.update({
+        where: { id: message.id },
+        data: {
+          status: wasSuccessful ? SmsStatus.SENT : SmsStatus.FAILED,
+          providerMessageId: result?.message_id || null,
+          lastError: wasSuccessful ? null : result?.error || 'SMS send failed.',
+        },
+      });
+    } catch (err: any) {
+      await this.prisma.smsMessage.update({
+        where: { id: message.id },
+        data: {
+          status: SmsStatus.FAILED,
+          lastError: err?.message || 'SMS send failed.',
+        },
+      });
+    }
+  }
+
   async send(dto: SendSmsDto) {
-    const sender = process.env.TWILIO_SENDER_ID;
-    const messages = await Promise.all(
+    const createdMessages = await Promise.all(
       dto.to.map(async (to) => {
         const normalizedTo = normalizeAuMobile(to) || to;
-        const message = await this.prisma.smsMessage.create({
+        return this.prisma.smsMessage.create({
           data: {
             toMobile: normalizedTo,
             body: dto.body,
@@ -105,36 +207,49 @@ export class SmsService {
             type: dto.type,
           },
         });
-        if (this.twilioClient) {
-          const toE164 = toE164AuMobile(normalizedTo);
-          try {
-            const response = await this.twilioClient.messages.create({
-              from: sender,
-              to: toE164,
-              body: dto.body,
-            });
-            await this.prisma.smsMessage.update({
-              where: { id: message.id },
-              data: {
-                status: SmsStatus.SENT,
-                providerMessageId: response.sid,
-                lastError: null,
-              },
-            });
-          } catch (err: any) {
-            await this.prisma.smsMessage.update({
-              where: { id: message.id },
-              data: {
-                status: SmsStatus.FAILED,
-                lastError: err?.message || 'SMS send failed.',
-              },
-            });
-          }
-        }
-        return normalizedTo;
       }),
     );
-    return { sent: messages.length };
+
+    try {
+      const response = await this.sendViaMobileMessage(
+        createdMessages.map((message) => ({
+          to: message.toMobile,
+          body: message.body,
+          customRef: message.id,
+        })),
+      );
+      const resultsByRef = new Map(
+        (response?.results || []).map((result) => [result.custom_ref || '', result]),
+      );
+      await Promise.all(
+        createdMessages.map(async (message) => {
+          const result = resultsByRef.get(message.id);
+          const wasSuccessful = result?.status === 'success' && !!result?.message_id;
+          await this.prisma.smsMessage.update({
+            where: { id: message.id },
+            data: {
+              status: wasSuccessful ? SmsStatus.SENT : SmsStatus.FAILED,
+              providerMessageId: result?.message_id || null,
+              lastError: wasSuccessful ? null : result?.error || 'SMS send failed.',
+            },
+          });
+        }),
+      );
+    } catch (err: any) {
+      await Promise.all(
+        createdMessages.map((message) =>
+          this.prisma.smsMessage.update({
+            where: { id: message.id },
+            data: {
+              status: SmsStatus.FAILED,
+              lastError: err?.message || 'SMS send failed.',
+            },
+          }),
+        ),
+      );
+    }
+
+    return { sent: createdMessages.length };
   }
 
   async getCustomerMessagesEnabled() {
@@ -336,33 +451,7 @@ export class SmsService {
       },
     });
 
-    if (!this.twilioClient) {
-      return;
-    }
-
-    const toE164 = toE164AuMobile(message.toMobile);
-    try {
-      const response = await this.twilioClient.messages.create({
-        from: process.env.TWILIO_SENDER_ID,
-        to: toE164,
-        body: message.body,
-      });
-      await this.prisma.smsMessage.update({
-        where: { id: message.id },
-        data: {
-          status: SmsStatus.SENT,
-          providerMessageId: response.sid,
-        },
-      });
-    } catch (err: any) {
-      await this.prisma.smsMessage.update({
-        where: { id: message.id },
-        data: {
-          status: SmsStatus.FAILED,
-          lastError: err?.message || 'SMS send failed.',
-        },
-      });
-    }
+    await this.sendSingleMessageRecord(message);
   }
 
   async processBatch(id: string, limit = 10) {
@@ -404,31 +493,7 @@ export class SmsService {
       },
     });
 
-    if (this.twilioClient) {
-      const toE164 = toE164AuMobile(message.toMobile);
-      try {
-        const response = await this.twilioClient.messages.create({
-          from: process.env.TWILIO_SENDER_ID,
-          to: toE164,
-          body: message.body,
-        });
-        await this.prisma.smsMessage.update({
-          where: { id: message.id },
-          data: {
-            status: SmsStatus.SENT,
-            providerMessageId: response.sid,
-          },
-        });
-      } catch (err: any) {
-        await this.prisma.smsMessage.update({
-          where: { id: message.id },
-          data: {
-            status: SmsStatus.FAILED,
-            lastError: err?.message || 'SMS send failed.',
-          },
-        });
-      }
-    }
+    await this.sendSingleMessageRecord(message);
 
     return { ok: true };
   }

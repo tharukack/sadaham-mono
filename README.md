@@ -14,7 +14,7 @@ pnpm install
 
 ```bash
 cp .env.example .env
-# Update DATABASE_URL and Twilio credentials as needed
+# Update DATABASE_URL and Mobile Message credentials as needed
 ```
 
 3. Run Prisma migrations and seed data
@@ -113,6 +113,5 @@ docker compose --env-file .env.production exec db sh -lc 'gunzip -c /tmp/backup.
 ## Migration
 docker compose --env-file .env.production exec api npx prisma migrate status
 docker compose --env-file .env.production exec api npx prisma migrate deploy
-
 
 

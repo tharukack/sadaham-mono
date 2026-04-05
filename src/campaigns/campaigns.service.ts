@@ -179,7 +179,7 @@ export class CampaignsService {
         vegCost: campaign.vegCost,
         eggCost: campaign.eggCost,
         otherCost: campaign.otherCost,
-        targetMealPackets: campaign.targetMealPackets,
+        targetMealPackets: (campaign as any).targetMealPackets ?? null,
       },
       orders: {
         totalOrders,
