@@ -914,15 +914,15 @@ export default function Dashboard() {
                   <Button onClick={() => setShowAddModal(true)}>Add Order</Button>
                 )}
               </div>
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-4">
                 <Card>
-                  <CardHeader className="pb-1 pt-2 px-3">
+                  <CardHeader className="pb-1 pt-1.5 px-2.5">
                     <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Meal Packet Progress
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2 pb-3 pt-0 px-3">
-                    <div className="text-2xl font-semibold">
+                  <CardContent className="space-y-1.5 pb-2.5 pt-0 px-2.5">
+                    <div className="text-xl font-semibold">
                       {targetMealPackets > 0 ? `${activeMealProgressPercent}%` : '-'}
                     </div>
                     <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
@@ -939,35 +939,35 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="pb-1 pt-2 px-3">
+                  <CardHeader className="pb-1 pt-1.5 px-2.5">
                     <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Total Orders
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="pb-3 pt-0 px-3">
-                    <div className="text-2xl font-semibold">{dashboardTotalOrders}</div>
+                  <CardContent className="pb-2.5 pt-0 px-2.5">
+                    <div className="text-xl font-semibold">{dashboardTotalOrders}</div>
                     <p className="text-[11px] text-muted-foreground">Active orders in campaign</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="pb-1 pt-2 px-3">
+                  <CardHeader className="pb-1 pt-1.5 px-2.5">
                     <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Total Meals
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="pb-3 pt-0 px-3">
-                    <div className="text-2xl font-semibold">{dashboardTotalMeals}</div>
+                  <CardContent className="pb-2.5 pt-0 px-2.5">
+                    <div className="text-xl font-semibold">{dashboardTotalMeals}</div>
                     <p className="text-[11px] text-muted-foreground">Active meal packets</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="pb-1 pt-2 px-3">
+                  <CardHeader className="pb-1 pt-1.5 px-2.5">
                     <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Campaign State
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="pb-3 pt-0 px-3">
-                    <div className="text-2xl font-semibold">{selectedCampaign.state}</div>
+                  <CardContent className="pb-2.5 pt-0 px-2.5">
+                    <div className="text-xl font-semibold">{selectedCampaign.state}</div>
                     <p className="text-[11px] text-muted-foreground">Current campaign status</p>
                   </CardContent>
                 </Card>

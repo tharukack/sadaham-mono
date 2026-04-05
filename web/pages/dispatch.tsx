@@ -109,6 +109,12 @@ export default function DispatchPage() {
     'created' | 'mainCollector' | 'enteredBy' | 'customer' | 'pickupBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
   >('created');
   const [ordersSortDir, setOrdersSortDir] = useState<'asc' | 'desc'>('asc');
+  const [bulkPage, setBulkPage] = useState(1);
+  const [bulkRowsPerPage, setBulkRowsPerPage] = useState<'10' | '20' | '50' | '100' | 'all'>('10');
+  const [bulkSortBy, setBulkSortBy] = useState<
+    'pickupBy' | 'mainCollector' | 'enteredBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
+  >('pickupBy');
+  const [bulkSortDir, setBulkSortDir] = useState<'asc' | 'desc'>('asc');
   const [systemUserFilter, setSystemUserFilter] = useState<string>('all');
   const [mainUserFilter, setMainUserFilter] = useState<string>('all');
 
@@ -326,6 +332,30 @@ export default function DispatchPage() {
     });
   }, [activeOrders, systemUserFilter, mainUserFilter]);
 
+  const bulkPickupOrders = useMemo(() => {
+    const grouped = new Map<string, any[]>();
+    activeOrders.forEach((order: any) => {
+      const pickupPerson = order.pickupByCustomer || order.customer;
+      const key = pickupPerson?.id || order.customerId || order.id;
+      const list = grouped.get(key) || [];
+      list.push(order);
+      grouped.set(key, list);
+    });
+    return Array.from(grouped.values())
+      .filter((group) => group.length > 1)
+      .flat();
+  }, [activeOrders]);
+
+  const bulkPickupTotalsByPerson = useMemo(() => {
+    const totals = new Map<string, number>();
+    activeOrders.forEach((order: any) => {
+      const pickupPerson = order.pickupByCustomer || order.customer;
+      const key = pickupPerson?.id || order.customerId || order.id;
+      totals.set(key, (totals.get(key) || 0) + getOrderMealTotals(order).total);
+    });
+    return totals;
+  }, [activeOrders]);
+
   const sortedOrders = useMemo(() => {
     const next = [...filteredOrders];
     next.sort((a: any, b: any) => {
@@ -388,9 +418,80 @@ export default function DispatchPage() {
     return Math.max(1, Math.ceil(sortedOrders.length / Number(ordersRowsPerPage)));
   }, [sortedOrders.length, ordersRowsPerPage]);
 
+  const sortedBulkOrders = useMemo(() => {
+    const next = [...bulkPickupOrders];
+    next.sort((a: any, b: any) => {
+      const aCreatedBy = a.createdBy;
+      const bCreatedBy = b.createdBy;
+      const aMainCollector =
+        aCreatedBy?.mainCollector && aCreatedBy.mainCollector.id !== aCreatedBy.id
+          ? aCreatedBy.mainCollector
+          : null;
+      const bMainCollector =
+        bCreatedBy?.mainCollector && bCreatedBy.mainCollector.id !== bCreatedBy.id
+          ? bCreatedBy.mainCollector
+          : null;
+      const aPickup = locations.find((loc: any) => loc.id === a.pickupLocationId)?.name || '';
+      const bPickup = locations.find((loc: any) => loc.id === b.pickupLocationId)?.name || '';
+      const aPickupBy = a.pickupByCustomer ? getName(a.pickupByCustomer) : getName(a.customer);
+      const bPickupBy = b.pickupByCustomer ? getName(b.pickupByCustomer) : getName(b.customer);
+      const aTotals = getOrderMealTotals(a);
+      const bTotals = getOrderMealTotals(b);
+      let result = 0;
+      switch (bulkSortBy) {
+        case 'pickupBy':
+          result = compareText(aPickupBy, bPickupBy);
+          break;
+        case 'mainCollector':
+          result = compareText(getName(aMainCollector || aCreatedBy), getName(bMainCollector || bCreatedBy));
+          break;
+        case 'enteredBy':
+          result = compareText(getName(aCreatedBy), getName(bCreatedBy));
+          break;
+        case 'mobile':
+          result = compareText(formatAuMobile(a.customer?.mobile || '') || '', formatAuMobile(b.customer?.mobile || '') || '');
+          break;
+        case 'pickup':
+          result = compareText(aPickup, bPickup);
+          break;
+        case 'packets':
+          result = compareNumber(aTotals.total, bTotals.total);
+          break;
+        case 'notes':
+          result = compareText(a.note || '', b.note || '');
+          break;
+      }
+      return bulkSortDir === 'asc' ? result : -result;
+    });
+    return next;
+  }, [bulkPickupOrders, bulkSortBy, bulkSortDir, locations]);
+
+  const bulkPageCount = useMemo(() => {
+    if (bulkRowsPerPage === 'all') return 1;
+    return Math.max(1, Math.ceil(sortedBulkOrders.length / Number(bulkRowsPerPage)));
+  }, [sortedBulkOrders.length, bulkRowsPerPage]);
+
+  const pagedBulkOrders = useMemo(() => {
+    if (bulkRowsPerPage === 'all') return sortedBulkOrders;
+    const start = (bulkPage - 1) * Number(bulkRowsPerPage);
+    return sortedBulkOrders.slice(start, start + Number(bulkRowsPerPage));
+  }, [sortedBulkOrders, bulkPage, bulkRowsPerPage]);
+
+  const bulkRangeLabel = useMemo(() => {
+    if (sortedBulkOrders.length === 0) return '0 of 0';
+    if (bulkRowsPerPage === 'all') return `1-${sortedBulkOrders.length} of ${sortedBulkOrders.length}`;
+    const start = (bulkPage - 1) * Number(bulkRowsPerPage) + 1;
+    const end = Math.min(bulkPage * Number(bulkRowsPerPage), sortedBulkOrders.length);
+    return `${start}-${end} of ${sortedBulkOrders.length}`;
+  }, [sortedBulkOrders.length, bulkPage, bulkRowsPerPage]);
+
   const allOrdersMealPacketCount = useMemo(
     () => sortedOrders.reduce((sum: number, order: any) => sum + getOrderMealTotals(order).total, 0),
     [sortedOrders]
+  );
+  const bulkMealPacketCount = useMemo(
+    () => sortedBulkOrders.reduce((sum: number, order: any) => sum + getOrderMealTotals(order).total, 0),
+    [sortedBulkOrders]
   );
 
   const toggleSummarySort = (
@@ -424,6 +525,17 @@ export default function DispatchPage() {
     }
     setOrdersSortBy(column);
     setOrdersSortDir('asc');
+  };
+
+  const toggleBulkSort = (
+    column: 'pickupBy' | 'mainCollector' | 'enteredBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
+  ) => {
+    if (bulkSortBy === column) {
+      setBulkSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setBulkSortBy(column);
+    setBulkSortDir('asc');
   };
 
   const getSortIndicator = (isActive: boolean, direction: 'asc' | 'desc') => {
@@ -582,6 +694,44 @@ export default function DispatchPage() {
     downloadCsv(`all-orders-${campaignFileLabel}.csv`, rows);
   };
 
+  const exportBulkOrdersCsv = () => {
+    const rows: Array<Array<unknown>> = [
+      [
+        'Order Pickup By',
+        'Pickup Person Total Packets',
+        'Main Collector',
+        'Entered By',
+        'Customer Mobile',
+        'Pickup Location',
+        'Total Packets',
+        'Notes',
+      ],
+    ];
+
+    sortedBulkOrders.forEach((order: any) => {
+      const createdBy = order.createdBy;
+      const mainCollector =
+        createdBy?.mainCollector && createdBy.mainCollector.id !== createdBy.id
+          ? createdBy.mainCollector
+          : null;
+      const totals = getOrderMealTotals(order);
+      const pickupPerson = order.pickupByCustomer || order.customer;
+      const pickupPersonKey = pickupPerson?.id || order.customerId || order.id;
+      rows.push([
+        order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer),
+        bulkPickupTotalsByPerson.get(pickupPersonKey) || totals.total,
+        getName(mainCollector || createdBy),
+        getName(createdBy),
+        formatAuMobile(order.customer?.mobile || '') || '',
+        order.pickupLocation?.name || '-',
+        totals.total,
+        order.note || '',
+      ]);
+    });
+
+    downloadCsv(`bulk-orders-${campaignFileLabel}.csv`, rows);
+  };
+
   return (
     <AppShell title="Dispatch">
       <PageHeader
@@ -593,6 +743,7 @@ export default function DispatchPage() {
           <TabsTrigger value="summary">Dispatch Summary</TabsTrigger>
           <TabsTrigger value="pickup">Orders By Pickup Point</TabsTrigger>
           <TabsTrigger value="orders">All Orders</TabsTrigger>
+          <TabsTrigger value="bulk">Bulk Orders</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary">
@@ -1216,6 +1367,171 @@ export default function DispatchPage() {
                               <TableCell className="max-w-[240px] truncate text-muted-foreground">
                                 {order.note || '-'}
                               </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bulk">
+          <Card>
+            <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle>Bulk Orders</CardTitle>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Total Orders: {sortedBulkOrders.length} | Total Meal Packets: {bulkMealPacketCount}
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={exportBulkOrdersCsv}
+                  disabled={
+                    locationsQuery.isLoading ||
+                    ordersQuery.isLoading ||
+                    currentCampaignQuery.isLoading ||
+                    !currentCampaignQuery.data ||
+                    sortedBulkOrders.length === 0
+                  }
+                >
+                  Export CSV
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {locationsQuery.isLoading || ordersQuery.isLoading || currentCampaignQuery.isLoading ? (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  Loading bulk orders...
+                </div>
+              ) : !currentCampaignQuery.data ? (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No active campaign. Bulk orders will appear when a campaign is started.
+                </div>
+              ) : sortedBulkOrders.length === 0 ? (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No bulk pickups found.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <span>Rows per page</span>
+                      <Select
+                        value={bulkRowsPerPage}
+                        onValueChange={(value) => {
+                          setBulkRowsPerPage(value as '10' | '20' | '50' | '100' | 'all');
+                          setBulkPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-full sm:w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                          <SelectItem value="all">Show all</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span>{bulkRangeLabel}</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBulkPage((prev) => Math.max(1, prev - 1))}
+                          disabled={bulkRowsPerPage === 'all' || bulkPage <= 1}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBulkPage((prev) => Math.min(bulkPageCount, prev + 1))}
+                          disabled={bulkRowsPerPage === 'all' || bulkPage >= bulkPageCount}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full overflow-x-auto">
+                    <Table className="min-w-[1300px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('pickupBy')}>
+                              Order Pickup By{getSortIndicator(bulkSortBy === 'pickupBy', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>Pickup Person Total Packets</TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('mainCollector')}>
+                              Main Collector{getSortIndicator(bulkSortBy === 'mainCollector', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('enteredBy')}>
+                              Entered By{getSortIndicator(bulkSortBy === 'enteredBy', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('mobile')}>
+                              Customer Mobile{getSortIndicator(bulkSortBy === 'mobile', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('pickup')}>
+                              Pickup Location{getSortIndicator(bulkSortBy === 'pickup', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('packets')}>
+                              Total Packets{getSortIndicator(bulkSortBy === 'packets', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('notes')}>
+                              Notes{getSortIndicator(bulkSortBy === 'notes', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pagedBulkOrders.map((order: any) => {
+                          const totals = getOrderMealTotals(order);
+                          const createdBy = order.createdBy;
+                          const mainCollector =
+                            createdBy?.mainCollector && createdBy.mainCollector.id !== createdBy.id
+                              ? createdBy.mainCollector
+                              : null;
+                          const pickupPerson = order.pickupByCustomer || order.customer;
+                          const pickupPersonKey = pickupPerson?.id || order.customerId || order.id;
+                          const pickupPersonTotalPackets =
+                            bulkPickupTotalsByPerson.get(pickupPersonKey) || totals.total;
+                          return (
+                            <TableRow key={order.id}>
+                              <TableCell>
+                                {order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer)}
+                              </TableCell>
+                              <TableCell className="font-medium">{pickupPersonTotalPackets}</TableCell>
+                              <TableCell>{getName(mainCollector || createdBy)}</TableCell>
+                              <TableCell>{getName(createdBy)}</TableCell>
+                              <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
+                              <TableCell>{order.pickupLocation?.name || '-'}</TableCell>
+                              <TableCell className="font-medium">{totals.total}</TableCell>
+                              <TableCell className="max-w-[240px] truncate text-muted-foreground">{order.note || '-'}</TableCell>
                             </TableRow>
                           );
                         })}
