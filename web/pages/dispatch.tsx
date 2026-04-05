@@ -112,7 +112,7 @@ export default function DispatchPage() {
   const [bulkPage, setBulkPage] = useState(1);
   const [bulkRowsPerPage, setBulkRowsPerPage] = useState<'10' | '20' | '50' | '100' | 'all'>('10');
   const [bulkSortBy, setBulkSortBy] = useState<
-    'pickupBy' | 'mainCollector' | 'enteredBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
+    'pickupBy' | 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
   >('pickupBy');
   const [bulkSortDir, setBulkSortDir] = useState<'asc' | 'desc'>('asc');
   const [systemUserFilter, setSystemUserFilter] = useState<string>('all');
@@ -435,6 +435,8 @@ export default function DispatchPage() {
       const bPickup = locations.find((loc: any) => loc.id === b.pickupLocationId)?.name || '';
       const aPickupBy = a.pickupByCustomer ? getName(a.pickupByCustomer) : getName(a.customer);
       const bPickupBy = b.pickupByCustomer ? getName(b.pickupByCustomer) : getName(b.customer);
+      const aCustomer = getName(a.customer);
+      const bCustomer = getName(b.customer);
       const aTotals = getOrderMealTotals(a);
       const bTotals = getOrderMealTotals(b);
       let result = 0;
@@ -447,6 +449,9 @@ export default function DispatchPage() {
           break;
         case 'enteredBy':
           result = compareText(getName(aCreatedBy), getName(bCreatedBy));
+          break;
+        case 'customer':
+          result = compareText(aCustomer, bCustomer);
           break;
         case 'mobile':
           result = compareText(formatAuMobile(a.customer?.mobile || '') || '', formatAuMobile(b.customer?.mobile || '') || '');
@@ -476,6 +481,25 @@ export default function DispatchPage() {
     const start = (bulkPage - 1) * Number(bulkRowsPerPage);
     return sortedBulkOrders.slice(start, start + Number(bulkRowsPerPage));
   }, [sortedBulkOrders, bulkPage, bulkRowsPerPage]);
+
+  const pagedBulkOrdersWithGroups = useMemo(() => {
+    let previousPickupBy = '';
+    let groupIndex = -1;
+
+    return pagedBulkOrders.map((order: any) => {
+      const pickupBy = order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer);
+      if (pickupBy !== previousPickupBy) {
+        groupIndex += 1;
+        previousPickupBy = pickupBy;
+      }
+
+      return {
+        order,
+        groupIndex,
+        pickupBy,
+      };
+    });
+  }, [pagedBulkOrders]);
 
   const bulkRangeLabel = useMemo(() => {
     if (sortedBulkOrders.length === 0) return '0 of 0';
@@ -528,7 +552,7 @@ export default function DispatchPage() {
   };
 
   const toggleBulkSort = (
-    column: 'pickupBy' | 'mainCollector' | 'enteredBy' | 'mobile' | 'pickup' | 'packets' | 'notes'
+    column: 'pickupBy' | 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
   ) => {
     if (bulkSortBy === column) {
       setBulkSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -701,6 +725,7 @@ export default function DispatchPage() {
         'Pickup Person Total Packets',
         'Main Collector',
         'Entered By',
+        'Customer',
         'Customer Mobile',
         'Pickup Location',
         'Total Packets',
@@ -722,6 +747,7 @@ export default function DispatchPage() {
         bulkPickupTotalsByPerson.get(pickupPersonKey) || totals.total,
         getName(mainCollector || createdBy),
         getName(createdBy),
+        getName(order.customer),
         formatAuMobile(order.customer?.mobile || '') || '',
         order.pickupLocation?.name || '-',
         totals.total,
@@ -1467,7 +1493,7 @@ export default function DispatchPage() {
                     </div>
                   </div>
                   <div className="w-full overflow-x-auto">
-                    <Table className="min-w-[1300px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
+                    <Table className="min-w-[1400px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                       <TableHeader>
                         <TableRow>
                           <TableHead>
@@ -1484,6 +1510,11 @@ export default function DispatchPage() {
                           <TableHead>
                             <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('enteredBy')}>
                               Entered By{getSortIndicator(bulkSortBy === 'enteredBy', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('customer')}>
+                              Customer{getSortIndicator(bulkSortBy === 'customer', bulkSortDir)}
                             </button>
                           </TableHead>
                           <TableHead>
@@ -1509,7 +1540,7 @@ export default function DispatchPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {pagedBulkOrders.map((order: any) => {
+                        {pagedBulkOrdersWithGroups.map(({ order, pickupBy, groupIndex }) => {
                           const totals = getOrderMealTotals(order);
                           const createdBy = order.createdBy;
                           const mainCollector =
@@ -1520,14 +1551,27 @@ export default function DispatchPage() {
                           const pickupPersonKey = pickupPerson?.id || order.customerId || order.id;
                           const pickupPersonTotalPackets =
                             bulkPickupTotalsByPerson.get(pickupPersonKey) || totals.total;
+                          const rowClassName =
+                            groupIndex % 2 === 0
+                              ? 'bg-sky-100 hover:bg-sky-100'
+                              : 'bg-background hover:bg-background';
                           return (
-                            <TableRow key={order.id}>
+                            <TableRow key={order.id} className={rowClassName}>
                               <TableCell>
-                                {order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer)}
+                                {pickupBy}
                               </TableCell>
                               <TableCell className="font-medium">{pickupPersonTotalPackets}</TableCell>
                               <TableCell>{getName(mainCollector || createdBy)}</TableCell>
                               <TableCell>{getName(createdBy)}</TableCell>
+                              <TableCell>
+                                <button
+                                  type="button"
+                                  className="text-left text-foreground underline-offset-4 hover:underline"
+                                  onClick={() => setDetailOrder(order)}
+                                >
+                                  {getName(order.customer)}
+                                </button>
+                              </TableCell>
                               <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
                               <TableCell>{order.pickupLocation?.name || '-'}</TableCell>
                               <TableCell className="font-medium">{totals.total}</TableCell>
