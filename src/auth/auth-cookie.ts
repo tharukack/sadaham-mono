@@ -18,7 +18,7 @@ export function setAuthCookie(res: Response, token: string, config: ConfigServic
     sameSite: 'lax',
     secure: isSecureCookie(config),
     path: '/',
-    maxAge: 12 * 60 * 60 * 1000,
+    maxAge: 24 * 60 * 60 * 1000,
   });
 }
 
