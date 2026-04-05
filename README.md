@@ -1,4 +1,4 @@
-# Order Management System
+﻿# Order Management System
 
 Monolithic full-stack starter for managing campaigns, orders, customers, and SMS notifications. The repository contains a NestJS + Prisma API (port 4000) and a Next.js frontend (port 3000).
 
@@ -82,7 +82,7 @@ pnpm run backup:drive
 gzip -dc backup.sql.gz | psql "postgresql://user:password@localhost:5432/order_management"
 ```
 
-##Production setup
+## Production setup
 
 docker compose --env-file .env.production up --build 
 
@@ -101,3 +101,18 @@ docker compose --env-file .env exec api npx prisma migrate deploy
 docker compose --env-file .env exec api npx prisma db seed
 
 docker compose --env-file .env exec api node prisma/import-customers.js
+
+## backup
+
+docker compose --env-file .env.production rm -sf db docker volume ls
+docker volume rm sadaham-mono_postgres_data
+docker compose --env-file .env.production up -d db
+docker cp .\backup.sql.gz sadaham-mono-db-1:/tmp/backup.sql.gz
+docker compose --env-file .env.production exec db sh -lc 'gunzip -c /tmp/backup.sql.gz | psql -U $user -d $db_name'
+
+## Migration
+docker compose --env-file .env.production exec api npx prisma migrate status
+docker compose --env-file .env.production exec api npx prisma migrate deploy
+
+
+

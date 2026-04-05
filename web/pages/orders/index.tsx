@@ -34,6 +34,41 @@ import { Pencil, Trash2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { formatAuMobile } from '../../lib/phone';
 
+const getName = (person?: any) => {
+  if (!person) return '';
+  return `${person.firstName || ''} ${person.lastName || ''}`.trim() || person.name || '';
+};
+
+const downloadCsv = (filename: string, rows: Array<Array<unknown>>) => {
+  if (typeof window === 'undefined') return;
+  const escapeCell = (value: unknown) => {
+    const text = String(value ?? '');
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  };
+  const csv = rows.map((row) => row.map(escapeCell).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+const toFileSafeName = (value?: string) =>
+  (value || 'orders')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'orders';
+
+const blankIfZero = (value: number) => (value === 0 ? "" : value);
+
+
 export default function OrdersPage() {
   const [currentRole, setCurrentRole] = useState<string>('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -206,8 +241,52 @@ export default function OrdersPage() {
   const activeOrderAmount = useMemo(() => {
     return activeOrders.reduce((sum: number, order: any) => sum + getOrderCost(order), 0);
   }, [activeOrders]);
+  const activeMealPacketCount = useMemo(() => {
+    return activeOrders.reduce((sum: number, order: any) => sum + getMealDetails(order).total, 0);
+  }, [activeOrders]);
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat(undefined, { style: 'currency', currency: 'AUD' }).format(value);
+
+  const exportOrdersCsv = () => {
+    const campaignFileLabel = toFileSafeName(currentCampaignQuery.data?.name);
+    const rows: Array<Array<unknown>> = [
+      [
+        'Customer',
+        'Customer Mobile',
+        'Pickup Location',
+        'Pickup By',
+        'Total Packets',
+        'Veg',
+        'Note',
+        'Status',
+        'Created At',
+        'Updated At',
+        'Created By',
+        'Updated By',
+      ],
+    ];
+
+    sortedOrders.forEach((order: any) => {
+      const mealDetails = getMealDetails(order);
+      rows.push([
+        getName(order.customer),
+        formatAuMobile(order.customer?.mobile || '') || '',
+        order.pickupLocation?.name || 'Unassigned',
+        order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer),
+        mealDetails.total,
+        blankIfZero(Number(order.vegQty || 0)),
+        order.note || '',
+        order.deletedAt ? 'Deleted' : 'Active',
+        order.createdAt ? new Date(order.createdAt).toLocaleString() : '',
+        order.updatedAt ? new Date(order.updatedAt).toLocaleString() : '',
+        getName(order.createdBy),
+        getName(order.updatedBy),
+      ]);
+    });
+
+    downloadCsv(`orders-${campaignFileLabel}.csv`, rows);
+  };
+
 
   const isAdmin = currentRole === 'ADMIN' || currentRole === 'SUPERADMIN';
   const isEditor = currentRole === 'EDITOR';
@@ -499,6 +578,10 @@ export default function OrdersPage() {
                     <span className="text-foreground">{activeOrderCount}</span>
                   </span>
                   <span className="rounded-full border px-3 py-1">
+                    <span className="font-medium text-foreground">Active Meal Packets</span>{' '}
+                    <span className="text-foreground">{activeMealPacketCount}</span>
+                  </span>
+                  <span className="rounded-full border px-3 py-1">
                     <span className="font-medium text-foreground">Active Cost</span>{' '}
                     <span className="text-foreground">{formatCurrency(activeOrderAmount)}</span>
                   </span>
@@ -513,7 +596,7 @@ export default function OrdersPage() {
               <Button disabled>Add Order</Button>
             )}
           </div>
-          <div className="flex items-center gap-2 pt-3">
+          <div className="flex flex-wrap items-center gap-2 pt-3">
             <Input
               className="flex-1 min-w-0 sm:min-w-[220px]"
               placeholder="Search orders by customer, pickup location, or mobile"
@@ -536,6 +619,9 @@ export default function OrdersPage() {
                 <SelectItem value="mine">My orders</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" type="button" onClick={exportOrdersCsv} disabled={sortedOrders.length === 0}>
+              Export CSV
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -821,29 +907,7 @@ export default function OrdersPage() {
               Pickup by:{' '}
               {editForm.pickupByCustomerId ? editPickupByLabel || 'Selected' : 'Same as customer'}
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="orders-edit-chicken">Chicken</Label>
-                <Input
-                  id="orders-edit-chicken"
-                  type="number"
-                  min={0}
-                  value={editForm.chickenQty}
-                  onChange={(e) => setEditForm({ ...editForm, chickenQty: Number(e.target.value) })}
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="orders-edit-fish">Fish</Label>
-                <Input
-                  id="orders-edit-fish"
-                  type="number"
-                  min={0}
-                  value={editForm.fishQty}
-                  onChange={(e) => setEditForm({ ...editForm, fishQty: Number(e.target.value) })}
-                  disabled={!canEditOrders}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 md:max-w-[180px]">
               <div className="space-y-2">
                 <Label htmlFor="orders-edit-veg">Veg</Label>
                 <Input
@@ -852,28 +916,6 @@ export default function OrdersPage() {
                   min={0}
                   value={editForm.vegQty}
                   onChange={(e) => setEditForm({ ...editForm, vegQty: Number(e.target.value) })}
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="orders-edit-egg">Egg</Label>
-                <Input
-                  id="orders-edit-egg"
-                  type="number"
-                  min={0}
-                  value={editForm.eggQty}
-                  onChange={(e) => setEditForm({ ...editForm, eggQty: Number(e.target.value) })}
-                  disabled={!canEditOrders}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="orders-edit-other">Other</Label>
-                <Input
-                  id="orders-edit-other"
-                  type="number"
-                  min={0}
-                  value={editForm.otherQty}
-                  onChange={(e) => setEditForm({ ...editForm, otherQty: Number(e.target.value) })}
                   disabled={!canEditOrders}
                 />
               </div>

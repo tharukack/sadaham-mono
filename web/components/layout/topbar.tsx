@@ -94,7 +94,7 @@ export function Topbar({ title }: { title: string }) {
         <div className="truncate text-lg font-semibold">{title}</div>
       </div>
       {campaignHeaderText && (
-        <div className="order-last w-full text-center text-sm font-medium text-slate-700 md:absolute md:left-1/2 md:top-1/2 md:w-auto md:-translate-x-1/2 md:-translate-y-1/2 md:px-4">
+        <div className="order-last w-full text-center text-base font-semibold tracking-wide text-amber-700 md:absolute md:left-1/2 md:top-1/2 md:w-auto md:-translate-x-1/2 md:-translate-y-1/2 md:px-4 md:text-lg lg:text-xl">
           {campaignHeaderText}
         </div>
       )}

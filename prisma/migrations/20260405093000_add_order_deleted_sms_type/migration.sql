@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "SmsMessageType" ADD VALUE IF NOT EXISTS 'ORDER_DELETED';

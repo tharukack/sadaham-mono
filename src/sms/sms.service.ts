@@ -158,6 +158,7 @@ export class SmsService {
     if (type === 'THANK_YOU') return 'Thank You Note';
     if (type === 'ORDER_CONFIRMATION') return 'Order Confirmation';
     if (type === 'ORDER_MODIFIED') return 'Order Modified';
+    if (type === 'ORDER_DELETED') return 'Order Deleted';
     return '';
   }
 

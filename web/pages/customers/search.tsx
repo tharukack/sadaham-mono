@@ -463,7 +463,7 @@ export default function CustomerSearchPage() {
           <form onSubmit={submit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="customer-name">First/Known Name</Label>
+                <Label htmlFor="customer-name"><span className="text-red-600">First</span>/Known Name</Label>
                 <Input
                   id="customer-name"
                   value={form.name}

@@ -64,6 +64,7 @@ export default function CampaignPage() {
     vegCost: 0,
     eggCost: 0,
     otherCost: 0,
+    targetMealPackets: 0,
   });
   const [campaignSearch, setCampaignSearch] = useState('');
   const [campaignPage, setCampaignPage] = useState(1);
@@ -189,6 +190,7 @@ export default function CampaignPage() {
       vegCost: editingCampaign.vegCost || 0,
       eggCost: editingCampaign.eggCost || 0,
       otherCost: editingCampaign.otherCost || 0,
+      targetMealPackets: editingCampaign.targetMealPackets || 0,
     });
   }, [editingCampaign]);
 
@@ -387,6 +389,7 @@ export default function CampaignPage() {
         vegCost: campaignForm.vegCost,
         eggCost: campaignForm.eggCost,
         otherCost: campaignForm.otherCost,
+        targetMealPackets: Number(campaignForm.targetMealPackets || 0),
       };
       if (editingCampaign) {
         await api.patch(`/campaigns/${editingCampaign.id}`, payload);
@@ -403,6 +406,7 @@ export default function CampaignPage() {
         vegCost: 0,
         eggCost: 0,
         otherCost: 0,
+        targetMealPackets: 0,
       });
       setEditingCampaign(null);
       setCampaignModalOpen(false);
@@ -838,6 +842,7 @@ export default function CampaignPage() {
                   vegCost: 0,
                   eggCost: 0,
                   otherCost: 0,
+                  targetMealPackets: 0,
                 });
                 setCampaignModalOpen(true);
               }}
@@ -1500,6 +1505,7 @@ export default function CampaignPage() {
               vegCost: 0,
               eggCost: 0,
               otherCost: 0,
+              targetMealPackets: 0,
             });
           }
         }}
@@ -1537,8 +1543,8 @@ export default function CampaignPage() {
                 disabled={!isAdmin}
               />
             </div>
-            <div className="grid grid-cols-1 gap-4 md:max-w-[220px]">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:max-w-[220px]">
                 <Label htmlFor="campaign-cost-veg">Veg Cost</Label>
                 <Input
                   id="campaign-cost-veg"
@@ -1550,6 +1556,23 @@ export default function CampaignPage() {
                     setCampaignForm({
                       ...campaignForm,
                       vegCost: Number(e.target.value),
+                    })
+                  }
+                  disabled={!isAdmin}
+                />
+              </div>
+              <div className="space-y-2 md:max-w-[220px]">
+                <Label htmlFor="campaign-target-meals">Target Meal Packets</Label>
+                <Input
+                  id="campaign-target-meals"
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={campaignForm.targetMealPackets}
+                  onChange={(e) =>
+                    setCampaignForm({
+                      ...campaignForm,
+                      targetMealPackets: Number(e.target.value),
                     })
                   }
                   disabled={!isAdmin}

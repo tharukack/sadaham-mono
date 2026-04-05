@@ -33,6 +33,7 @@ enum SmsStatus {
 enum SmsMessageType {
   ORDER_CONFIRMATION
   ORDER_MODIFIED
+  ORDER_DELETED
   ORDER_REMINDER
   THANK_YOU
 }
@@ -112,6 +113,7 @@ model Campaign {
   startedAt DateTime       @default(now())
   frozenAt  DateTime?
   endedAt   DateTime?
+  targetMealPackets Int?   
   chickenCost Float        @default(0)
   fishCost    Float        @default(0)
   vegCost     Float        @default(0)

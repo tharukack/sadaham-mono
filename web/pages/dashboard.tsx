@@ -36,7 +36,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useToast } from '../components/ui/use-toast';
 import { Pencil, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import { OrderDetailsModal } from '../components/order-details-modal';
-import { KpiCards } from '../components/dashboard/kpi-cards';
 import { OrdersTrendChart } from '../components/dashboard/orders-trend-chart';
 import { MealTotalsChart } from '../components/dashboard/meal-totals-chart';
 import { PickupLocationsTable } from '../components/dashboard/pickup-locations-table';
@@ -54,6 +53,7 @@ type Campaign = {
   vegCost?: number;
   eggCost?: number;
   otherCost?: number;
+  targetMealPackets?: number | null;
 };
 
 type CampaignStats = {
@@ -272,6 +272,12 @@ export default function Dashboard() {
   };
 
   const getOrderCost = (order: any) => getOrderCostForCampaign(selectedCampaign, order);
+  const getOrderMealTotal = (order: any) =>
+    Number(order.chickenQty || 0) +
+    Number(order.fishQty || 0) +
+    Number(order.vegQty || 0) +
+    Number(order.eggQty || 0) +
+    Number(order.otherQty || 0);
 
   const existingOrderForCustomer = useMemo(() => {
     if (!selectedCampaign?.id || !selectedCustomerId) return null;
@@ -313,6 +319,17 @@ export default function Dashboard() {
       previousOrderMealTotals.other
     );
   }, [previousOrderMealTotals]);
+
+  const activeMealPacketCount = useMemo(() => {
+    return activeOrders.reduce((sum: number, order: any) => sum + getOrderMealTotal(order), 0);
+  }, [activeOrders]);
+  const dashboardTotalMeals = activeMealPacketCount;
+  const dashboardTotalOrders = activeOrders.length;
+  const targetMealPackets = Number(selectedCampaign?.targetMealPackets || 0);
+  const activeMealProgressPercent = useMemo(() => {
+    if (!targetMealPackets) return 0;
+    return Math.min(100, Math.round((activeMealPacketCount / targetMealPackets) * 100));
+  }, [activeMealPacketCount, targetMealPackets]);
 
   const canCreateOrders =
     !!currentCampaignQuery.data &&
@@ -884,12 +901,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="text-lg font-semibold">{selectedCampaign.name}</div>
-                  <Badge variant="secondary">{selectedCampaign.state}</Badge>
-                  <Badge variant="outline">All Orders: {orders.length}</Badge>
-                  <Badge variant="outline">Active Orders: {activeOrders.length}</Badge>
                   {isFallback && (
                     <span className="text-sm text-muted-foreground">
                       Showing last ended campaign
@@ -899,6 +913,64 @@ export default function Dashboard() {
                 {canCreateOrders && (
                   <Button onClick={() => setShowAddModal(true)}>Add Order</Button>
                 )}
+              </div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-1 pt-2 px-3">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Meal Packet Progress
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pb-3 pt-0 px-3">
+                    <div className="text-2xl font-semibold">
+                      {targetMealPackets > 0 ? `${activeMealProgressPercent}%` : '-'}
+                    </div>
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-emerald-600 transition-all"
+                        style={{ width: `${targetMealPackets > 0 ? activeMealProgressPercent : 0}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {targetMealPackets > 0
+                        ? `${dashboardTotalMeals} of ${targetMealPackets} target packets`
+                        : 'Target not set'}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-1 pt-2 px-3">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Total Orders
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3 pt-0 px-3">
+                    <div className="text-2xl font-semibold">{dashboardTotalOrders}</div>
+                    <p className="text-[11px] text-muted-foreground">Active orders in campaign</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-1 pt-2 px-3">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Total Meals
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3 pt-0 px-3">
+                    <div className="text-2xl font-semibold">{dashboardTotalMeals}</div>
+                    <p className="text-[11px] text-muted-foreground">Active meal packets</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-1 pt-2 px-3">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Campaign State
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3 pt-0 px-3">
+                    <div className="text-2xl font-semibold">{selectedCampaign.state}</div>
+                    <p className="text-[11px] text-muted-foreground">Current campaign status</p>
+                  </CardContent>
+                </Card>
               </div>
               <Separator />
               <div className="space-y-3">
@@ -1127,13 +1199,6 @@ export default function Dashboard() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <KpiCards
-              totalOrders={emptyOrders.totalOrders}
-              totalCustomers={emptyOrders.totalCustomers}
-              mealTotals={emptyOrders.mealTotals}
-              sms={emptySms}
-              campaignState={stats?.campaign?.state}
-            />
             <div className="grid gap-6 lg:grid-cols-2">
               <OrdersTrendChart data={emptyOrders.dailyOrders} />
               <MealTotalsChart totals={emptyOrders.mealTotals} />
@@ -1193,16 +1258,9 @@ export default function Dashboard() {
             ) : !previousOrderMealTotals || previousOrderPacketTotal === null ? (
               <span className="font-semibold text-foreground">No order in previous campaign</span>
             ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-muted-foreground">
-                  Total packets: {previousOrderPacketTotal}
-                </span>
-                <Badge variant="secondary">Chicken {previousOrderMealTotals.chicken}</Badge>
-                <Badge variant="secondary">Fish {previousOrderMealTotals.fish}</Badge>
-                <Badge variant="secondary">Veg {previousOrderMealTotals.veg}</Badge>
-                <Badge variant="secondary">Egg {previousOrderMealTotals.egg}</Badge>
-                <Badge variant="secondary">Other {previousOrderMealTotals.other}</Badge>
-              </div>
+              <span className="text-xs font-semibold text-muted-foreground">
+                Total packets: {previousOrderPacketTotal}
+              </span>
             )}
           </div>
           <form onSubmit={submitOrder} className="space-y-6">

@@ -89,6 +89,42 @@ export class OrdersService {
     }
   }
 
+  private async sendOrderDeleted(order: any) {
+    const enabled = await this.smsService.getCustomerMessagesEnabled();
+    if (!enabled) {
+      this.logger.log(`Skipping order deleted SMS for order ${order?.id}: customer messages disabled`);
+      return;
+    }
+    const mobile = order?.customer?.mobile;
+    if (!mobile) {
+      this.logger.warn(`Skipping order deleted SMS for order ${order?.id}: missing customer mobile`);
+      return;
+    }
+    const template = await this.smsService.getTemplateByName('Order Deleted');
+    if (!template?.body) {
+      this.logger.warn(`Skipping order deleted SMS for order ${order?.id}: missing template body`);
+      return;
+    }
+    const body = interpolateOrderTemplate(template.body, order);
+    try {
+      this.logger.log(`Sending order deleted SMS for order ${order.id} to ${mobile}`);
+      await this.smsService.send({
+        body,
+        to: [mobile],
+        campaignId: order.campaignId,
+        orderId: order.id,
+        customerId: order.customerId,
+        type: 'ORDER_DELETED' as SmsMessageType,
+      });
+      this.logger.log(`Order deleted SMS queued for order ${order.id}`);
+      return;
+    } catch (err: any) {
+      const message = err?.message || 'SMS send failed.';
+      this.logger.error(`Order deleted SMS failed for order ${order?.id}: ${message}`);
+      return message;
+    }
+  }
+
   async list(user: User) {
     if (user.role === Role.ADMIN || user.role === Role.SUPERADMIN) {
       const orders = await this.prisma.order.findMany({
@@ -386,7 +422,8 @@ export class OrdersService {
       campaignId: deleted.campaignId,
       customerId: deleted.customerId,
     });
-    return deleted;
+    const smsError = await this.sendOrderDeleted(deleted);
+    return smsError ? { ...deleted, smsError } : deleted;
   }
 
   async restore(id: string, user: User) {

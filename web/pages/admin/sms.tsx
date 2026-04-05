@@ -108,6 +108,10 @@ export default function SmsPage() {
         defaultBody: 'Hi {{name}}, your order has been updated.',
       },
       {
+        name: 'Order Deleted',
+        defaultBody: 'Hi {{name}}, your order has been deleted.',
+      },
+      {
         name: 'Order Reminder',
         defaultBody: 'Hi {{name}}, just a reminder about your order pickup.',
       },

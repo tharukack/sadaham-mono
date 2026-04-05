@@ -5,6 +5,7 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const https = require("https");
 const path = require("path");
+const readline = require("readline");
 const { spawn } = require("child_process");
 const { URL } = require("url");
 const zlib = require("zlib");
@@ -29,7 +30,7 @@ async function runBackup(options = {}) {
   const dumpPath = await createDatabaseDump(config, now);
 
   try {
-    const dumpHash = await sha256File(dumpPath);
+    const dumpHash = await hashDumpForChangeDetection(dumpPath);
     const dumpSizeBytes = await getFileSize(dumpPath);
     log(`Raw dump size: ${formatBytes(dumpSizeBytes)} (${dumpSizeBytes} bytes)`);
     const token = await getAccessToken(config.credentials);
@@ -379,15 +380,30 @@ async function createDatabaseDump(config, now) {
   return dumpPath;
 }
 
-async function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
-    const stream = fs.createReadStream(filePath);
-
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolve(hash.digest("hex")));
+async function hashDumpForChangeDetection(filePath) {
+  const hash = crypto.createHash("sha256");
+  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  const rl = readline.createInterface({
+    input: stream,
+    crlfDelay: Infinity,
   });
+
+  try {
+    for await (const line of rl) {
+      // PostgreSQL plain-text dumps can include random \restrict keys that change on every run.
+      if (/^\\(?:un)?restrict\s+[A-Za-z0-9]+\s*$/.test(line)) {
+        continue;
+      }
+
+      hash.update(line);
+      hash.update("\n");
+    }
+  } catch (error) {
+    stream.destroy();
+    throw error;
+  }
+
+  return hash.digest("hex");
 }
 
 async function gzipFile(sourcePath, targetPath) {

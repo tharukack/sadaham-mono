@@ -38,4 +38,9 @@ export class UpdateCampaignDto {
   @IsNumber()
   @Min(0)
   otherCost?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  targetMealPackets?: number;
 }
