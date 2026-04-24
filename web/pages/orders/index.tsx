@@ -6,7 +6,7 @@ import { PageHeader } from '../../components/page-header';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
@@ -111,6 +111,7 @@ export default function OrdersPage() {
   const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
   const [ordersSortBy, setOrdersSortBy] = useState<'created' | 'updated' | 'name'>('updated');
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<any | null>(null);
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editPickupByLabel, setEditPickupByLabel] = useState('');
@@ -531,6 +532,7 @@ export default function OrdersPage() {
       await api.patch(`/orders/${id}/delete`);
       await ordersQuery.refetch();
       toast({ title: 'Order deleted' });
+      setDeleteConfirmOrder(null);
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -543,9 +545,16 @@ export default function OrdersPage() {
   const restoreOrder = async (id: string) => {
     if (!canEditOrders) return;
     try {
-      await api.patch(`/orders/${id}/restore`);
+      const response = await api.patch(`/orders/${id}/restore`);
       await ordersQuery.refetch();
       toast({ title: 'Order restored' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -776,7 +785,7 @@ export default function OrdersPage() {
                                 size="icon"
                                 variant="destructive"
                                 className="h-7 w-7"
-                                onClick={() => deleteOrder(order.id)}
+                                onClick={() => setDeleteConfirmOrder(order)}
                                 disabled={!canEditOrders}
                                 aria-label="Delete order"
                               >
@@ -954,6 +963,37 @@ export default function OrdersPage() {
               )}
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleteConfirmOrder}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteConfirmOrder(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Order</DialogTitle>
+            <DialogDescription>
+              Delete the order for {deleteConfirmOrder ? getName(deleteConfirmOrder.customer) : 'this customer'}?
+              This will mark it as deleted until it is restored.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" type="button" onClick={() => setDeleteConfirmOrder(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={() => (deleteConfirmOrder ? deleteOrder(deleteConfirmOrder.id) : null)}
+              disabled={!canEditOrders}
+            >
+              Delete Order
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <OrderDetailsModal

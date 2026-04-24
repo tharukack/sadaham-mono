@@ -30,14 +30,14 @@ export class CampaignsController {
 
   @Get(':id/stats')
   @Roles(Role.ADMIN, Role.EDITOR, Role.VIEWER)
-  stats(@Param('id') id: string) {
-    return this.campaignsService.stats(id);
+  stats(@Param('id') id: string, @Req() req: any) {
+    return this.campaignsService.stats(id, req?.user);
   }
 
   @Get(':id/orders')
   @Roles(Role.ADMIN, Role.EDITOR, Role.VIEWER)
-  listOrders(@Param('id') id: string) {
-    return this.campaignsService.listOrders(id);
+  listOrders(@Param('id') id: string, @Req() req: any) {
+    return this.campaignsService.listOrders(id, req?.user);
   }
 
   @Post()

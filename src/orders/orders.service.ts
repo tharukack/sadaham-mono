@@ -149,7 +149,10 @@ export class OrdersService {
       return [];
     }
     const orders = await this.prisma.order.findMany({
-      where: { campaignId: current.id },
+      where: {
+        campaignId: current.id,
+        ...(user.role === Role.EDITOR ? { createdById: user.id } : {}),
+      },
       include: {
         customer: true,
         pickupByCustomer: true,
@@ -468,6 +471,7 @@ export class OrdersService {
       campaignId: restored.campaignId,
       customerId: restored.customerId,
     });
-    return restored;
+    const smsError = await this.sendOrderConfirmation(restored);
+    return smsError ? { ...restored, smsError } : restored;
   }
 }

@@ -115,6 +115,7 @@ export default function DispatchPage() {
     'pickupBy' | 'mainCollector' | 'enteredBy' | 'customer' | 'mobile' | 'pickup' | 'packets' | 'notes'
   >('pickupBy');
   const [bulkSortDir, setBulkSortDir] = useState<'asc' | 'desc'>('asc');
+  const [selectedBulkPickupId, setSelectedBulkPickupId] = useState<string>(ALL_PICKUP_POINTS);
   const [systemUserFilter, setSystemUserFilter] = useState<string>('all');
   const [mainUserFilter, setMainUserFilter] = useState<string>('all');
 
@@ -298,6 +299,9 @@ export default function DispatchPage() {
   useEffect(() => {
     setPickupPage(1);
   }, [selectedPickupId]);
+  useEffect(() => {
+    setBulkPage(1);
+  }, [selectedBulkPickupId]);
   const campaignFileLabel = toFileSafeName(currentCampaignQuery.data?.name);
 
   const systemUsers = useMemo(() => {
@@ -334,7 +338,12 @@ export default function DispatchPage() {
 
   const bulkPickupOrders = useMemo(() => {
     const grouped = new Map<string, any[]>();
-    activeOrders.forEach((order: any) => {
+    const filteredOrders =
+      selectedBulkPickupId === ALL_PICKUP_POINTS
+        ? activeOrders
+        : activeOrders.filter((order: any) => order.pickupLocationId === selectedBulkPickupId);
+
+    filteredOrders.forEach((order: any) => {
       const pickupPerson = order.pickupByCustomer || order.customer;
       const key = pickupPerson?.id || order.customerId || order.id;
       const list = grouped.get(key) || [];
@@ -344,7 +353,7 @@ export default function DispatchPage() {
     return Array.from(grouped.values())
       .filter((group) => group.length > 1)
       .flat();
-  }, [activeOrders]);
+  }, [activeOrders, selectedBulkPickupId]);
 
   const bulkPickupTotalsByPerson = useMemo(() => {
     const totals = new Map<string, number>();
@@ -483,20 +492,32 @@ export default function DispatchPage() {
   }, [sortedBulkOrders, bulkPage, bulkRowsPerPage]);
 
   const pagedBulkOrdersWithGroups = useMemo(() => {
-    let previousPickupBy = '';
+    let previousPickupPersonKey = '';
     let groupIndex = -1;
+    const firstPickupByIndex = new Map<string, number>();
 
-    return pagedBulkOrders.map((order: any) => {
+    pagedBulkOrders.forEach((order: any, index: number) => {
+      const pickupPerson = order.pickupByCustomer || order.customer;
+      const pickupPersonKey = pickupPerson?.id || order.customerId || order.id;
+      if (!firstPickupByIndex.has(pickupPersonKey)) {
+        firstPickupByIndex.set(pickupPersonKey, index);
+      }
+    });
+
+    return pagedBulkOrders.map((order: any, index: number) => {
+      const pickupPerson = order.pickupByCustomer || order.customer;
+      const pickupPersonKey = pickupPerson?.id || order.customerId || order.id;
       const pickupBy = order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer);
-      if (pickupBy !== previousPickupBy) {
+      if (pickupPersonKey !== previousPickupPersonKey) {
         groupIndex += 1;
-        previousPickupBy = pickupBy;
+        previousPickupPersonKey = pickupPersonKey;
       }
 
       return {
         order,
         groupIndex,
         pickupBy,
+        showPickupSubtotal: firstPickupByIndex.get(pickupPersonKey) === index,
       };
     });
   }, [pagedBulkOrders]);
@@ -722,17 +743,17 @@ export default function DispatchPage() {
     const rows: Array<Array<unknown>> = [
       [
         'Order Pickup By',
-        'Pickup Person Total Packets',
+        'Customer Name',
+        'Customer Mobile',
+        'Total Packets',
         'Main Collector',
         'Entered By',
-        'Customer',
-        'Customer Mobile',
-        'Pickup Location',
-        'Total Packets',
+        'Pickup Person Subtotal',
         'Notes',
       ],
     ];
 
+    const subtotalWritten = new Set<string>();
     sortedBulkOrders.forEach((order: any) => {
       const createdBy = order.createdBy;
       const mainCollector =
@@ -742,15 +763,16 @@ export default function DispatchPage() {
       const totals = getOrderMealTotals(order);
       const pickupPerson = order.pickupByCustomer || order.customer;
       const pickupPersonKey = pickupPerson?.id || order.customerId || order.id;
+      const showPickupSubtotal = !subtotalWritten.has(pickupPersonKey);
+      subtotalWritten.add(pickupPersonKey);
       rows.push([
         order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer),
-        bulkPickupTotalsByPerson.get(pickupPersonKey) || totals.total,
-        getName(mainCollector || createdBy),
-        getName(createdBy),
         getName(order.customer),
         formatAuMobile(order.customer?.mobile || '') || '',
-        order.pickupLocation?.name || '-',
         totals.total,
+        getName(mainCollector || createdBy),
+        getName(createdBy),
+        showPickupSubtotal ? bulkPickupTotalsByPerson.get(pickupPersonKey) || totals.total : '',
         order.note || '',
       ]);
     });
@@ -765,11 +787,11 @@ export default function DispatchPage() {
         description="Review pickup point summaries and grouped orders."
       />
       <Tabs defaultValue="summary">
-        <TabsList>
-          <TabsTrigger value="summary">Dispatch Summary</TabsTrigger>
-          <TabsTrigger value="pickup">Orders By Pickup Point</TabsTrigger>
-          <TabsTrigger value="orders">All Orders</TabsTrigger>
-          <TabsTrigger value="bulk">Bulk Orders</TabsTrigger>
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
+          <TabsTrigger className="flex-1 whitespace-normal sm:flex-none" value="summary">Dispatch Summary</TabsTrigger>
+          <TabsTrigger className="flex-1 whitespace-normal sm:flex-none" value="pickup">Orders By Pickup Point</TabsTrigger>
+          <TabsTrigger className="flex-1 whitespace-normal sm:flex-none" value="orders">All Orders</TabsTrigger>
+          <TabsTrigger className="flex-1 whitespace-normal sm:flex-none" value="bulk">Bulk Orders</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary">
@@ -923,7 +945,7 @@ export default function DispatchPage() {
                     </Table>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span>Rows per page</span>
                       <Select
                         value={summaryRowsPerPage}
@@ -944,9 +966,9 @@ export default function DispatchPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <span>{summaryRangeLabel}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1035,7 +1057,7 @@ export default function DispatchPage() {
               ) : (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span>Rows per page</span>
                       <Select
                         value={collectorRowsPerPage}
@@ -1130,7 +1152,7 @@ export default function DispatchPage() {
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2 text-sm text-muted-foreground">
                       <span>{pickupRangeLabel}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1240,7 +1262,7 @@ export default function DispatchPage() {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span>Rows per page</span>
                         <Select
                           value={ordersRowsPerPage}
@@ -1261,7 +1283,7 @@ export default function DispatchPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span>Sort by</span>
                         <Select
                           value={`${ordersSortBy}:${ordersSortDir}`}
@@ -1288,9 +1310,9 @@ export default function DispatchPage() {
                         </Select>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <span>{ordersRangeLabel}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1417,6 +1439,19 @@ export default function DispatchPage() {
                 </div>
               </div>
               <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+                <Select value={selectedBulkPickupId} onValueChange={setSelectedBulkPickupId}>
+                  <SelectTrigger className="w-full md:w-[280px]">
+                    <SelectValue placeholder="Select pickup location" />
+                  </SelectTrigger>
+                  <SelectContent viewportClassName="max-h-[19rem]">
+                    <SelectItem value={ALL_PICKUP_POINTS}>All pickup points</SelectItem>
+                    {locations.map((loc: any) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   size="sm"
                   variant="outline"
@@ -1444,12 +1479,14 @@ export default function DispatchPage() {
                 </div>
               ) : sortedBulkOrders.length === 0 ? (
                 <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No bulk pickups found.
+                  {selectedBulkPickupId === ALL_PICKUP_POINTS
+                    ? 'No bulk pickups found.'
+                    : 'No bulk pickups found for this pickup location.'}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span>Rows per page</span>
                       <Select
                         value={bulkRowsPerPage}
@@ -1470,9 +1507,9 @@ export default function DispatchPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <span>{bulkRangeLabel}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1501,7 +1538,21 @@ export default function DispatchPage() {
                               Order Pickup By{getSortIndicator(bulkSortBy === 'pickupBy', bulkSortDir)}
                             </button>
                           </TableHead>
-                          <TableHead>Pickup Person Total Packets</TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('customer')}>
+                              Customer Name{getSortIndicator(bulkSortBy === 'customer', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('mobile')}>
+                              Customer Mobile{getSortIndicator(bulkSortBy === 'mobile', bulkSortDir)}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('packets')}>
+                              Total Packets{getSortIndicator(bulkSortBy === 'packets', bulkSortDir)}
+                            </button>
+                          </TableHead>
                           <TableHead>
                             <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('mainCollector')}>
                               Main Collector{getSortIndicator(bulkSortBy === 'mainCollector', bulkSortDir)}
@@ -1512,26 +1563,7 @@ export default function DispatchPage() {
                               Entered By{getSortIndicator(bulkSortBy === 'enteredBy', bulkSortDir)}
                             </button>
                           </TableHead>
-                          <TableHead>
-                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('customer')}>
-                              Customer{getSortIndicator(bulkSortBy === 'customer', bulkSortDir)}
-                            </button>
-                          </TableHead>
-                          <TableHead>
-                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('mobile')}>
-                              Customer Mobile{getSortIndicator(bulkSortBy === 'mobile', bulkSortDir)}
-                            </button>
-                          </TableHead>
-                          <TableHead>
-                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('pickup')}>
-                              Pickup Location{getSortIndicator(bulkSortBy === 'pickup', bulkSortDir)}
-                            </button>
-                          </TableHead>
-                          <TableHead>
-                            <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('packets')}>
-                              Total Packets{getSortIndicator(bulkSortBy === 'packets', bulkSortDir)}
-                            </button>
-                          </TableHead>
+                          <TableHead>Pickup Person Subtotal</TableHead>
                           <TableHead>
                             <button type="button" className="flex items-center gap-1 font-medium" onClick={() => toggleBulkSort('notes')}>
                               Notes{getSortIndicator(bulkSortBy === 'notes', bulkSortDir)}
@@ -1540,7 +1572,7 @@ export default function DispatchPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {pagedBulkOrdersWithGroups.map(({ order, pickupBy, groupIndex }) => {
+                        {pagedBulkOrdersWithGroups.map(({ order, pickupBy, groupIndex, showPickupSubtotal }) => {
                           const totals = getOrderMealTotals(order);
                           const createdBy = order.createdBy;
                           const mainCollector =
@@ -1560,9 +1592,6 @@ export default function DispatchPage() {
                               <TableCell>
                                 {pickupBy}
                               </TableCell>
-                              <TableCell className="font-medium">{pickupPersonTotalPackets}</TableCell>
-                              <TableCell>{getName(mainCollector || createdBy)}</TableCell>
-                              <TableCell>{getName(createdBy)}</TableCell>
                               <TableCell>
                                 <button
                                   type="button"
@@ -1573,8 +1602,12 @@ export default function DispatchPage() {
                                 </button>
                               </TableCell>
                               <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
-                              <TableCell>{order.pickupLocation?.name || '-'}</TableCell>
                               <TableCell className="font-medium">{totals.total}</TableCell>
+                              <TableCell>{getName(mainCollector || createdBy)}</TableCell>
+                              <TableCell>{getName(createdBy)}</TableCell>
+                              <TableCell className="font-medium">
+                                {showPickupSubtotal ? pickupPersonTotalPackets : ''}
+                              </TableCell>
                               <TableCell className="max-w-[240px] truncate text-muted-foreground">{order.note || '-'}</TableCell>
                             </TableRow>
                           );

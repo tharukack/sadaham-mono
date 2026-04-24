@@ -9,7 +9,7 @@ import { PageHeader } from '../components/page-header';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
@@ -138,6 +138,7 @@ export default function Dashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<any | null>(null);
   const [orderSaving, setOrderSaving] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [addExistingOrderId, setAddExistingOrderId] = useState<string | null>(null);
@@ -856,6 +857,7 @@ export default function Dashboard() {
       await ordersQuery.refetch();
       await statsQuery.refetch();
       toast({ title: 'Order deleted' });
+      setDeleteConfirmOrder(null);
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -868,10 +870,17 @@ export default function Dashboard() {
   const restoreOrder = async (id: string) => {
     if (!canDeleteOrders) return;
     try {
-      await api.patch(`/orders/${id}/restore`);
+      const response = await api.patch(`/orders/${id}/restore`);
       await ordersQuery.refetch();
       await statsQuery.refetch();
       toast({ title: 'Order restored' });
+      if (response?.data?.smsError) {
+        toast({
+          variant: 'destructive',
+          title: 'SMS error',
+          description: response.data.smsError,
+        });
+      }
     } catch (err: any) {
       toast({
         variant: 'destructive',
@@ -1074,14 +1083,14 @@ export default function Dashboard() {
                                         >
                                           <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                                         </Button>
-                                        <Button
-                                          size="icon"
-                                          variant="destructive"
-                                          className="h-7 w-7"
-                                          onClick={() => deleteOrder(order.id)}
-                                          disabled={!canDeleteOrders}
-                                          aria-label="Delete order"
-                                        >
+                                      <Button
+                                        size="icon"
+                                        variant="destructive"
+                                        className="h-7 w-7"
+                                        onClick={() => setDeleteConfirmOrder(order)}
+                                        disabled={!canDeleteOrders}
+                                        aria-label="Delete order"
+                                      >
                                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                                         </Button>
                                       </div>
@@ -1519,6 +1528,37 @@ export default function Dashboard() {
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={!!deleteConfirmOrder}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteConfirmOrder(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Order</DialogTitle>
+            <DialogDescription>
+              Delete the order for {deleteConfirmOrder ? `${deleteConfirmOrder.customer?.name || ''}`.trim() || 'this customer' : 'this customer'}?
+              This will mark it as deleted until it is restored.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" type="button" onClick={() => setDeleteConfirmOrder(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={() => (deleteConfirmOrder ? deleteOrder(deleteConfirmOrder.id) : null)}
+              disabled={!canDeleteOrders}
+            >
+              Delete Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <OrderDetailsModal
         order={detailOrder}
@@ -1529,4 +1569,3 @@ export default function Dashboard() {
     </AppShell>
   );
 }
-

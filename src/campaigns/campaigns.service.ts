@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/utils/prisma.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
-import { CampaignState } from '@prisma/client';
+import { CampaignState, Role, User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 
 @Injectable()
@@ -20,13 +20,16 @@ export class CampaignsService {
     });
   }
 
-  async listOrders(id: string) {
+  async listOrders(id: string, user?: User) {
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
     if (!campaign) {
       throw new BadRequestException('Campaign not found.');
     }
     const orders = await this.prisma.order.findMany({
-      where: { campaignId: id },
+      where: {
+        campaignId: id,
+        ...(user?.role === Role.EDITOR ? { createdById: user.id } : {}),
+      },
       include: {
         customer: true,
         pickupByCustomer: true,
@@ -100,18 +103,22 @@ export class CampaignsService {
     return summary;
   }
 
-  async stats(id: string) {
+  async stats(id: string, user?: User) {
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
     if (!campaign) {
       throw new BadRequestException('Campaign not found.');
     }
+    const orderScope =
+      user?.role === Role.EDITOR
+        ? { campaignId: id, deletedAt: null, createdById: user.id }
+        : { campaignId: id, deletedAt: null };
 
     const totalOrders = await this.prisma.order.count({
-      where: { campaignId: id, deletedAt: null },
+      where: orderScope,
     });
 
     const mealTotals = await this.prisma.order.aggregate({
-      where: { campaignId: id, deletedAt: null },
+      where: orderScope,
       _sum: {
         chickenQty: true,
         fishQty: true,
@@ -123,7 +130,7 @@ export class CampaignsService {
 
     const pickupGroups = await this.prisma.order.groupBy({
       by: ['pickupLocationId'],
-      where: { campaignId: id, deletedAt: null },
+      where: orderScope,
       _count: { _all: true },
     });
     const pickupIds = pickupGroups.map((group) => group.pickupLocationId);
@@ -143,8 +150,7 @@ export class CampaignsService {
 
     const orderDates = await this.prisma.order.findMany({
       where: {
-        campaignId: id,
-        deletedAt: null,
+        ...orderScope,
         createdAt: { gte: startDate },
       },
       select: { createdAt: true },
