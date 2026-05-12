@@ -19,6 +19,7 @@ import { Separator } from '../ui/separator';
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
   const [currentRole, setCurrentRole] = useState('');
+  const [canViewDispatch, setCanViewDispatch] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -27,16 +28,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       if (stored) {
         const parsed = JSON.parse(stored);
         setCurrentRole(parsed?.role || '');
+        setCanViewDispatch(Boolean(parsed?.canViewDispatch));
       }
     } catch {
       setCurrentRole('');
+      setCanViewDispatch(false);
     }
   }, []);
 
   const navSections = useMemo(() => {
     const isSuperAdmin = currentRole === 'SUPERADMIN';
+    const isAdmin = currentRole === 'ADMIN' || isSuperAdmin;
     const isEditor = currentRole === 'EDITOR';
     const isViewer = currentRole === 'VIEWER';
+    const showDispatch = isAdmin || canViewDispatch;
     return [
       {
         title: 'Overview',
@@ -50,8 +55,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           { href: '/customers/search', label: 'Customers', icon: Users },
           { href: '/admin/locations', label: 'Pickup Locations', icon: MapPin },
         ].filter((item) => {
+          if (item.href === '/dispatch') {
+            return showDispatch;
+          }
           if (isViewer) {
-            return ['/dispatch'].includes(item.href);
+            return false;
           }
           return true;
         }),
@@ -81,7 +89,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         }),
       },
     ].filter((section) => section.items.length > 0);
-  }, [currentRole]);
+  }, [canViewDispatch, currentRole]);
 
   return (
     <aside className="flex h-full w-full flex-col gap-6 p-4">

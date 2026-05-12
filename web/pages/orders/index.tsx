@@ -32,7 +32,7 @@ import {
 import { useToast } from '../../components/ui/use-toast';
 import { Pencil, Trash2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
-import { formatAuMobile } from '../../lib/phone';
+import { formatAuMobile, maskAuMobileLastSix } from '../../lib/phone';
 
 const getName = (person?: any) => {
   if (!person) return '';
@@ -247,6 +247,11 @@ export default function OrdersPage() {
   }, [activeOrders]);
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat(undefined, { style: 'currency', currency: 'AUD' }).format(value);
+  const shouldMaskMobile = currentRole === 'EDITOR' || currentRole === 'VIEWER';
+  const formatOrderMobile = (value?: string | null) => {
+    const mobile = value || '';
+    return shouldMaskMobile ? maskAuMobileLastSix(mobile) : formatAuMobile(mobile);
+  };
 
   const exportOrdersCsv = () => {
     const campaignFileLabel = toFileSafeName(currentCampaignQuery.data?.name);
@@ -271,7 +276,7 @@ export default function OrdersPage() {
       const mealDetails = getMealDetails(order);
       rows.push([
         getName(order.customer),
-        formatAuMobile(order.customer?.mobile || '') || '',
+        formatOrderMobile(order.customer?.mobile) || '',
         order.pickupLocation?.name || 'Unassigned',
         order.pickupByCustomer ? getName(order.pickupByCustomer) : getName(order.customer),
         mealDetails.total,
@@ -682,7 +687,7 @@ export default function OrdersPage() {
                             {order.customer?.name}
                           </button>
                         </TableCell>
-                        <TableCell>{formatAuMobile(order.customer?.mobile || '') || '-'}</TableCell>
+                        <TableCell>{formatOrderMobile(order.customer?.mobile) || '-'}</TableCell>
                         <TableCell>{order.pickupLocation?.name || 'Unassigned'}</TableCell>
                         <TableCell>
                           {order.pickupByCustomer

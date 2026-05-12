@@ -54,6 +54,7 @@ model User {
   role           Role
   passwordHash   String
   mustChangePassword Boolean @default(false)
+  canViewDispatch Boolean @default(false)
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt

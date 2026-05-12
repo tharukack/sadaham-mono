@@ -19,16 +19,31 @@ export class UsersService {
     private config: ConfigService,
   ) {}
 
-  findAll() {
-    return this.prisma.user.findMany();
-  }
-
-  findOne(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
-  }
-
   private generateTempPassword() {
     return randomBytes(6).toString('base64url').slice(0, 8);
+  }
+
+  private canRoleViewDispatch(role: Role, canViewDispatch?: boolean | null) {
+    return role === Role.ADMIN || role === Role.SUPERADMIN || Boolean(canViewDispatch);
+  }
+
+  private withEffectiveDispatchAccess<T extends { role: Role; canViewDispatch?: boolean | null }>(
+    user: T,
+  ) {
+    return {
+      ...user,
+      canViewDispatch: this.canRoleViewDispatch(user.role, user.canViewDispatch),
+    };
+  }
+
+  async findAll() {
+    const users = await this.prisma.user.findMany();
+    return users.map((user) => this.withEffectiveDispatchAccess(user));
+  }
+
+  async findOne(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    return user ? this.withEffectiveDispatchAccess(user) : null;
   }
 
   async create(dto: CreateUserDto, actorUserId: string, actorRole?: Role) {
@@ -59,6 +74,7 @@ export class UsersService {
           email: dto.email,
           address: dto.address,
           role: dto.role,
+          canViewDispatch: this.canRoleViewDispatch(dto.role, dto.canViewDispatch),
           passwordHash,
           mustChangePassword: true,
           isActive: dto.isActive ?? true,
@@ -76,6 +92,7 @@ export class UsersService {
           email: true,
           address: true,
           role: true,
+          canViewDispatch: true,
           isActive: true,
           mainCollectorId: true,
           createdAt: true,
@@ -94,6 +111,7 @@ export class UsersService {
             mobile: updated.mobile,
             email: updated.email,
             isActive: updated.isActive,
+            canViewDispatch: updated.canViewDispatch,
             mainCollectorId: updated.mainCollectorId,
           },
         },
@@ -131,16 +149,26 @@ export class UsersService {
         throw new BadRequestException('User already in the system.');
       }
     }
+    const nextRole = dto.role ?? existingUser.role;
+    const nextCanViewDispatch = this.canRoleViewDispatch(
+      nextRole,
+      dto.canViewDispatch ?? existingUser.canViewDispatch,
+    );
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { ...dto, mobile: normalizedMobile || dto.mobile },
+      data: {
+        ...dto,
+        role: nextRole,
+        mobile: normalizedMobile || dto.mobile,
+        canViewDispatch: nextCanViewDispatch,
+      },
     });
     if (actorUserId) {
       await this.audit.log(actorUserId, 'User', id, 'USER_UPDATED', {
         updatedFields: Object.keys(dto),
       });
     }
-    return updated;
+    return this.withEffectiveDispatchAccess(updated);
   }
 
   async resetPassword(id: string, actorUserId: string) {

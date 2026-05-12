@@ -53,6 +53,7 @@ export class AuthService {
     address: string | null;
     role: any;
     isActive: boolean;
+    canViewDispatch?: boolean | null;
     mainCollectorId: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -66,6 +67,8 @@ export class AuthService {
       address: user.address,
       role: user.role,
       isActive: user.isActive,
+      canViewDispatch:
+        user.role === 'ADMIN' || user.role === 'SUPERADMIN' || Boolean(user.canViewDispatch),
       mainCollectorId: user.mainCollectorId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

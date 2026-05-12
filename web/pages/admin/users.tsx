@@ -16,6 +16,10 @@ import { useToast } from '../../components/ui/use-toast';
 import { Pencil } from 'lucide-react';
 import { formatAuMobile, normalizeAuMobile } from '../../lib/phone';
 
+const isPrivilegedDispatchRole = (role?: string) => role === 'ADMIN' || role === 'SUPERADMIN';
+const getEffectiveDispatchAccess = (role?: string, canViewDispatch?: boolean) =>
+  isPrivilegedDispatchRole(role) || Boolean(canViewDispatch);
+
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -44,6 +48,7 @@ export default function UsersPage() {
     address: '',
     role: 'VIEWER',
     isActive: true,
+    canViewDispatch: false,
     mainCollectorId: '',
   });
   const [collectorSearch, setCollectorSearch] = useState('');
@@ -121,6 +126,7 @@ export default function UsersPage() {
       address: (form.address || '').trim(),
       role: form.role,
       isActive: form.isActive,
+      canViewDispatch: getEffectiveDispatchAccess(form.role, form.canViewDispatch),
       mainCollectorId: form.mainCollectorId || '',
     };
     const original = {
@@ -131,6 +137,10 @@ export default function UsersPage() {
       address: (editingUser.address || '').trim(),
       role: editingUser.role || 'VIEWER',
       isActive: editingUser.isActive ?? true,
+      canViewDispatch: getEffectiveDispatchAccess(
+        editingUser.role || 'VIEWER',
+        editingUser.canViewDispatch,
+      ),
       mainCollectorId:
         editingUser.mainCollectorId && editingUser.mainCollectorId !== editingUser.id
           ? editingUser.mainCollectorId
@@ -144,6 +154,7 @@ export default function UsersPage() {
     form.email,
     form.firstName,
     form.isActive,
+    form.canViewDispatch,
     form.lastName,
     form.mainCollectorId,
     form.mobile,
@@ -188,6 +199,10 @@ export default function UsersPage() {
       address: editingUser.address || "",
       role: editingUser.role || "VIEWER",
       isActive: editingUser.isActive ?? true,
+      canViewDispatch: getEffectiveDispatchAccess(
+        editingUser.role || 'VIEWER',
+        editingUser.canViewDispatch,
+      ),
       mainCollectorId:
         editingUser.mainCollectorId && editingUser.mainCollectorId !== editingUser.id
           ? editingUser.mainCollectorId
@@ -222,6 +237,7 @@ export default function UsersPage() {
       address: '',
       role: 'VIEWER',
       isActive: true,
+      canViewDispatch: false,
       mainCollectorId: '',
     });
     setCollectorSearch('');
@@ -243,6 +259,7 @@ export default function UsersPage() {
           address: form.address || null,
           role: form.role,
           isActive: form.isActive,
+          canViewDispatch: getEffectiveDispatchAccess(form.role, form.canViewDispatch),
           mainCollectorId: form.mainCollectorId || editingUserId,
         };
         await api.patch(`/users/${editingUserId}`, payload);
@@ -255,6 +272,7 @@ export default function UsersPage() {
           address: form.address || undefined,
           role: form.role,
           isActive: form.isActive,
+          canViewDispatch: getEffectiveDispatchAccess(form.role, form.canViewDispatch),
         };
         if (form.mainCollectorId) {
           payload.mainCollectorId = form.mainCollectorId;
@@ -358,7 +376,7 @@ export default function UsersPage() {
           ) : (
             <div className="space-y-3">
               <div className="w-full overflow-x-auto">
-                <Table className="min-w-[1400px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
+                <Table className="min-w-[1500px] whitespace-nowrap text-sm [&_td]:py-2 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
@@ -366,6 +384,7 @@ export default function UsersPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Main Collector</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Dispatch</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Updated At</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -396,6 +415,15 @@ export default function UsersPage() {
                           ) : (
                             <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700" variant="outline">
                               Viewer
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {getEffectiveDispatchAccess(user.role, user.canViewDispatch) ? (
+                            <Badge variant="outline">Enabled</Badge>
+                          ) : (
+                            <Badge className="border-slate-200 bg-slate-50 text-slate-700" variant="outline">
+                              Disabled
                             </Badge>
                           )}
                         </TableCell>
@@ -563,7 +591,18 @@ export default function UsersPage() {
                 <Label>Role</Label>
                 <Select
                   value={form.role}
-                  onValueChange={(value) => setForm({ ...form, role: value })}
+                  onValueChange={(value) => {
+                    const wasPrivileged = isPrivilegedDispatchRole(form.role);
+                    setForm({
+                      ...form,
+                      role: value,
+                      canViewDispatch: isPrivilegedDispatchRole(value)
+                        ? true
+                        : wasPrivileged
+                        ? false
+                        : form.canViewDispatch,
+                    });
+                  }}
                   disabled={!canEditUser}
                 >
                   <SelectTrigger>
@@ -589,6 +628,24 @@ export default function UsersPage() {
                     {form.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Dispatch Tab</Label>
+                <div className="flex items-center gap-3">
+                  <Toggle
+                    checked={getEffectiveDispatchAccess(form.role, form.canViewDispatch)}
+                    onCheckedChange={(value) => setForm({ ...form, canViewDispatch: value })}
+                    disabled={!canEditUser || isPrivilegedDispatchRole(form.role)}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {getEffectiveDispatchAccess(form.role, form.canViewDispatch) ? 'Shown' : 'Hidden'}
+                  </span>
+                </div>
+                {isPrivilegedDispatchRole(form.role) && (
+                  <p className="text-xs text-muted-foreground">
+                    Dispatch is always shown for admins and superadmins.
+                  </p>
+                )}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="user-collector">Main Collector</Label>

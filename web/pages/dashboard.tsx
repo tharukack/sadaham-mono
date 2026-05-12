@@ -37,8 +37,8 @@ import { useToast } from '../components/ui/use-toast';
 import { Pencil, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import { OrderDetailsModal } from '../components/order-details-modal';
 import { OrdersTrendChart } from '../components/dashboard/orders-trend-chart';
-import { MealTotalsChart } from '../components/dashboard/meal-totals-chart';
-import { PickupLocationsTable } from '../components/dashboard/pickup-locations-table';
+import { MealPacketsTrendChart } from '../components/dashboard/meal-packets-trend-chart';
+import { UserOrderPercentagesTable } from '../components/dashboard/user-order-percentages-table';
 import { formatAuMobile } from '../lib/phone';
 
 type Campaign = {
@@ -279,6 +279,22 @@ export default function Dashboard() {
     Number(order.vegQty || 0) +
     Number(order.eggQty || 0) +
     Number(order.otherQty || 0);
+  const getPersonName = (person?: any) => {
+    if (!person) return 'Unknown';
+    const fullName = `${person.firstName || ''} ${person.lastName || ''}`.trim();
+    return fullName || person.name || 'Unknown';
+  };
+  const formatSydneyDay = (value?: string | Date | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-CA', {
+      timeZone: 'Australia/Sydney',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
 
   const existingOrderForCustomer = useMemo(() => {
     if (!selectedCampaign?.id || !selectedCustomerId) return null;
@@ -331,6 +347,44 @@ export default function Dashboard() {
     if (!targetMealPackets) return 0;
     return Math.min(100, Math.round((activeMealPacketCount / targetMealPackets) * 100));
   }, [activeMealPacketCount, targetMealPackets]);
+  const mealPacketsTrend = useMemo(() => {
+    const dailyMap = new Map<string, number>();
+    activeOrders.forEach((order: any) => {
+      const day = formatSydneyDay(order.createdAt);
+      if (!day) return;
+      dailyMap.set(day, (dailyMap.get(day) || 0) + getOrderMealTotal(order));
+    });
+    return Array.from(dailyMap.entries())
+      .map(([date, mealPackets]) => ({ date, mealPackets }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [activeOrders]);
+  const userOrderPercentages = useMemo(() => {
+    const userMap = new Map<string, { userId: string; name: string; orders: number; mealPackets: number }>();
+    activeOrders.forEach((order: any) => {
+      const createdBy = order.createdBy;
+      const userId = createdBy?.id || 'unknown';
+      const existing =
+        userMap.get(userId) ||
+        {
+          userId,
+          name: getPersonName(createdBy),
+          orders: 0,
+          mealPackets: 0,
+        };
+      existing.orders += 1;
+      existing.mealPackets += getOrderMealTotal(order);
+      userMap.set(userId, existing);
+    });
+    return Array.from(userMap.values())
+      .map((row) => ({
+        ...row,
+        orderPercent:
+          dashboardTotalOrders > 0 ? Number(((row.orders / dashboardTotalOrders) * 100).toFixed(1)) : 0,
+        mealPercent:
+          dashboardTotalMeals > 0 ? Number(((row.mealPackets / dashboardTotalMeals) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.orders - a.orders || b.mealPackets - a.mealPackets || a.name.localeCompare(b.name));
+  }, [activeOrders, dashboardTotalMeals, dashboardTotalOrders]);
 
   const canCreateOrders =
     !!currentCampaignQuery.data &&
@@ -1210,19 +1264,13 @@ export default function Dashboard() {
           <TabsContent value="overview" className="space-y-6">
             <div className="grid gap-6 lg:grid-cols-2">
               <OrdersTrendChart data={emptyOrders.dailyOrders} />
-              <MealTotalsChart totals={emptyOrders.mealTotals} />
+              <MealPacketsTrendChart data={mealPacketsTrend} />
             </div>
-            <PickupLocationsTable
-              rows={emptyOrders.byPickupLocation}
-              totalOrders={emptyOrders.totalOrders}
-            />
+            <UserOrderPercentagesTable rows={userOrderPercentages} />
           </TabsContent>
 
           <TabsContent value="details" className="space-y-6">
-            <PickupLocationsTable
-              rows={emptyOrders.byPickupLocation}
-              totalOrders={emptyOrders.totalOrders}
-            />
+            <UserOrderPercentagesTable rows={userOrderPercentages} />
             <Card>
               <CardHeader>
                 <CardTitle>Meal Totals</CardTitle>

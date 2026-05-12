@@ -31,6 +31,10 @@ export class CreateUserDto {
   isActive?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  canViewDispatch?: boolean;
+
+  @IsOptional()
   @IsUUID()
   mainCollectorId?: string;
 }

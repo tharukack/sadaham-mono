@@ -34,3 +34,20 @@ export function formatAuMobile(input: string): string {
 
   return normalized;
 }
+
+export function maskAuMobileLastSix(input: string): string {
+  const formatted = formatAuMobile(input);
+  if (!formatted) return formatted;
+
+  let maskedDigits = 0;
+  return formatted
+    .split('')
+    .reverse()
+    .map((char) => {
+      if (!/\d/.test(char) || maskedDigits >= 6) return char;
+      maskedDigits += 1;
+      return '*';
+    })
+    .reverse()
+    .join('');
+}

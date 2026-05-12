@@ -34,6 +34,10 @@ export class UpdateUserDto {
   isActive?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  canViewDispatch?: boolean;
+
+  @IsOptional()
   @IsUUID()
   mainCollectorId?: string;
 }
